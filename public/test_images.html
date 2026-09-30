@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image Test</title>
+</head>
+<body>
+    <h1>Image Loading Test</h1>
+    <div id="status"></div>
+    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+        <div>
+            <h2>RPG.png</h2>
+            <img src="/assets/RPG.png" onload="document.getElementById('status').innerHTML += 'RPG.png loaded<br>'" onerror="document.getElementById('status').innerHTML += 'RPG.png FAILED<br>'" width="100">
+        </div>
+        <div>
+            <h2>RPG_show.png</h2>
+            <img src="/assets/RPG_show.png" onload="document.getElementById('status').innerHTML += 'RPG_show.png loaded<br>'" onerror="document.getElementById('status').innerHTML += 'RPG_show.png FAILED<br>'" width="100">
+        </div>
+        <div>
+            <h2>Rocket.png</h2>
+            <img src="/assets/Rocket.png" onload="document.getElementById('status').innerHTML += 'Rocket.png loaded<br>'" onerror="document.getElementById('status').innerHTML += 'Rocket.png FAILED<br>'" width="100">
+        </div>
+        <div>
+            <h2>pistol_show.png</h2>
+            <img src="/assets/pistol_show.png" onload="document.getElementById('status').innerHTML += 'pistol_show.png loaded<br>'" onerror="document.getElementById('status').innerHTML += 'pistol_show.png FAILED<br>'" width="100">
+        </div>
+        <div>
+            <h2>shotgun_show.png</h2>
+            <img src="/assets/shotgun_show.png" onload="document.getElementById('status').innerHTML += 'shotgun_show.png loaded<br>'" onerror="document.getElementById('status').innerHTML += 'shotgun_show.png FAILED<br>'" width="100">
+        </div>
+        <div>
+            <h2>smg_show.png</h2>
+            <img src="/assets/smg_show.png" onload="document.getElementById('status').innerHTML += 'smg_show.png loaded<br>'" onerror="document.getElementById('status').innerHTML += 'smg_show.png FAILED<br>'" width="100">
+        </div>
+        <div>
+            <h2>sniper_show.png</h2>
+            <img src="/assets/sniper_show.png" onload="document.getElementById('status').innerHTML += 'sniper_show.png loaded<br>'" onerror="document.getElementById('status').innerHTML += 'sniper_show.png FAILED<br>'" width="100">
+        </div>
+    </div>
+    <div style="margin-top: 20px;">
+        <h2>Load Status:</h2>
+        <p id="status" style="color: green;"></p>
+    </div>
+</body>
+</html>

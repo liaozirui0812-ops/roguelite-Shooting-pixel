@@ -5,6 +5,8 @@ import { defineConfig, globalIgnores } from 'eslint/config';
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  // The regression runner uses CommonJS to register its test-only TS loader.
+  { files: ['scripts/*.cjs', 'tests/*.cjs'], rules: { '@typescript-eslint/no-require-imports': 'off' } },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

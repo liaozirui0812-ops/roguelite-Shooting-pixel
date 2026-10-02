@@ -1,0 +1,393 @@
+{
+  "source": "D:\\roguelite-Shooting-pixel\\public\\assets",
+  "method": "script / alpha-only / original RGB preserved",
+  "changed": [
+    {
+      "name": "ammo_supply.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\ammo_supply.png",
+      "source_sha256": "1aa4e1db30d2efed9779551dfd45209790f84a997b9460d49dcd5fef86c50907",
+      "output_sha256": "04e05fce879b4e0368d085e10e1133566658fe6914ff4373675097baf570f938",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 3247930,
+      "visible_pixels": 946374,
+      "partial_alpha_pixels": 5428,
+      "bbox": [
+        344,
+        555,
+        1690,
+        1498
+      ]
+    },
+    {
+      "name": "aura.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\aura.png",
+      "source_sha256": "14e6ca8f4595a2cb6a75137f7d7f795698ce118d8d720c7f6a7169d5cdfab8d4",
+      "output_sha256": "34262c2ccd0b37021710dc615ce662e3b1b395d046f3ce88ffb76278196f9245",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 2958336,
+      "visible_pixels": 1235968,
+      "partial_alpha_pixels": 44933,
+      "bbox": [
+        255,
+        285,
+        1792,
+        1751
+      ]
+    },
+    {
+      "name": "critical_rage.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\critical_rage.png",
+      "source_sha256": "2525b059f2c6abbb3a0547ae95e165b47ede9649265f92f18eca96099853c414",
+      "output_sha256": "2be6618af00abbfe4d15e50f4fbb6acd7360869a3d5cb16b2ec1f6116007c3eb",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 3259123,
+      "visible_pixels": 935181,
+      "partial_alpha_pixels": 483,
+      "bbox": [
+        435,
+        385,
+        1612,
+        1662
+      ]
+    },
+    {
+      "name": "desperate_fight.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\desperate_fight.png",
+      "source_sha256": "b2806261bb2ac5d6acb5939706302a9a135137e71ed7f7473d8107c1d619517a",
+      "output_sha256": "ef8cbf5fb979d0f369b29c9d8962bdabe971e97adc9c91d92e5469b818eab972",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 1775514,
+      "visible_pixels": 2418790,
+      "partial_alpha_pixels": 7441,
+      "bbox": [
+        166,
+        33,
+        1879,
+        2048
+      ]
+    },
+    {
+      "name": "execution.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\execution.png",
+      "source_sha256": "777a1d32a73b3f8440da883765e763227e320837e24b1d4aca522229a588fb82",
+      "output_sha256": "256924619ee90ed68527cab7d2f89ac76b4ffdacafea214b7ea7c7030c851b29",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 3655137,
+      "visible_pixels": 539167,
+      "partial_alpha_pixels": 13847,
+      "bbox": [
+        540,
+        350,
+        1504,
+        1684
+      ]
+    },
+    {
+      "name": "fire_blast.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\fire_blast.png",
+      "source_sha256": "9c9bad114e3df35cfd312f5af48b31b8b10e9f6b96d1fcb83801f132a393e937",
+      "output_sha256": "11693e2d989d2efbeab9c6753148833ce3705b799298724bf967962f1e70e77f",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 3380125,
+      "visible_pixels": 814179,
+      "partial_alpha_pixels": 30073,
+      "bbox": [
+        296,
+        387,
+        1799,
+        1655
+      ]
+    },
+    {
+      "name": "fire_buff.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\fire_buff.png",
+      "source_sha256": "aac3eb81167d334525fba2f55c0c082aa5fdc7552c7d727e911eb61dc4965a10",
+      "output_sha256": "ab8dc3d2c4c2e2fdaf9df29e9a94bc3af7cdc3f5ebfe494e2ee73e90823ee5d7",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 3812048,
+      "visible_pixels": 382256,
+      "partial_alpha_pixels": 7288,
+      "bbox": [
+        344,
+        521,
+        1765,
+        1492
+      ]
+    },
+    {
+      "name": "fire_burn_speed.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\fire_burn_speed.png",
+      "source_sha256": "e10a23d766b42e061ffa3925c40f54d76d63683f679e148f01b4ebdea2193e46",
+      "output_sha256": "02b25a4ac081ceb7ddf0d941ad3246e03c116eb5d11f458495acc092c3b18901",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 2972072,
+      "visible_pixels": 1222232,
+      "partial_alpha_pixels": 13573,
+      "bbox": [
+        359,
+        273,
+        1798,
+        1696
+      ]
+    },
+    {
+      "name": "fire_ember.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\fire_ember.png",
+      "source_sha256": "c50f0fb05ab27a9f4667db8ec9676f130fb853f14c9bcdd8fbc696318f01c69d",
+      "output_sha256": "89aa17c2e4f04c7d15f099937c2d8351b95647b6b5e4f25055b8025ebd1a9ecd",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 4010845,
+      "visible_pixels": 183459,
+      "partial_alpha_pixels": 465,
+      "bbox": [
+        689,
+        784,
+        1386,
+        1257
+      ]
+    },
+    {
+      "name": "fire_eternal.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\fire_eternal.png",
+      "source_sha256": "7675e402a98f45d1d56e13a445623fd81f51835bcc09fb6b3871e1c295699562",
+      "output_sha256": "95b0bbe73b8d86211a32b29c35c9720a7784cf49918e4ba4f67d0b982b555521",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 3009033,
+      "visible_pixels": 1185271,
+      "partial_alpha_pixels": 7945,
+      "bbox": [
+        436,
+        298,
+        1611,
+        1754
+      ]
+    },
+    {
+      "name": "fire_penetrate.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\fire_penetrate.png",
+      "source_sha256": "0287928c1a57b520c8dc7d806bf10cfa65764084b7e5e36f434ecc1bd707e42e",
+      "output_sha256": "7b9eb3ee74199bbe6c4e5bfd6ff60a3fa9c7aabf01565eeedbcaa38c9636b683",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 3204273,
+      "visible_pixels": 990031,
+      "partial_alpha_pixels": 8632,
+      "bbox": [
+        53,
+        113,
+        1893,
+        1523
+      ]
+    },
+    {
+      "name": "fire_trail_range.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\fire_trail_range.png",
+      "source_sha256": "58046fc08216c6fbfc0f2f04fcc9d6a076e271e7275e917d657ecf5a23cb4a3c",
+      "output_sha256": "d5ebaa95c3f8c8cd24b66e0a8c514703be2deb5b61c8a15f9bd190f1c805f6a7",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 3839558,
+      "visible_pixels": 354746,
+      "partial_alpha_pixels": 19187,
+      "bbox": [
+        274,
+        652,
+        1784,
+        1382
+      ]
+    },
+    {
+      "name": "jitui.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\jitui.png",
+      "source_sha256": "618556350f84f4dd5bea650c064cf3e8a45fc70ea381c3359847be76a19c0c34",
+      "output_sha256": "3752b16ee1b836ea4a68d6a3716485f651f726e145db2300676a14d33333583d",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 3769338,
+      "visible_pixels": 424966,
+      "partial_alpha_pixels": 12169,
+      "bbox": [
+        293,
+        735,
+        1758,
+        1316
+      ]
+    },
+    {
+      "name": "pistol_final_strike.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\pistol_final_strike.png",
+      "source_sha256": "803354cf0be756a297f7e1bf1d1f6364466a0963495e44113a29e343669c1262",
+      "output_sha256": "723478ce43b592363bb31aabd0c50e9e00dbeaf89db80fdb743eaa1e0db5d1f7",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 3296072,
+      "visible_pixels": 898232,
+      "partial_alpha_pixels": 2568,
+      "bbox": [
+        547,
+        554,
+        1502,
+        1496
+      ]
+    },
+    {
+      "name": "poison.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\poison.png",
+      "source_sha256": "fc76d84927b007cb256362dda36f2aa271a14054867c540d5c7a33627494766a",
+      "output_sha256": "768094b35da933b3a835c8bda459c03631d06b4a5aaa1e25b6d91c02cfb59433",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 3636096,
+      "visible_pixels": 558208,
+      "partial_alpha_pixels": 8013,
+      "bbox": [
+        662,
+        284,
+        1387,
+        1767
+      ]
+    },
+    {
+      "name": "poison_buff.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\poison_buff.png",
+      "source_sha256": "560a988ff761d75fddc98b16f6a03595db76a1f42b0fc9b74a92fbf1118777f8",
+      "output_sha256": "b82980c594b9b58fed856e9535c9dc9f5cbd28250a309be829eda7d758d56c3a",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 2776463,
+      "visible_pixels": 1417841,
+      "partial_alpha_pixels": 4111,
+      "bbox": [
+        27,
+        468,
+        2023,
+        1672
+      ]
+    },
+    {
+      "name": "poison_enhance.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\poison_enhance.png",
+      "source_sha256": "7498a6ec30a9b6dfacb4d8d5f56e29d46d7ec881f134d1abc30a7792a6c25414",
+      "output_sha256": "8ea07091fd813f904178cbd009390fba21f79b5701855dac39fda26687ba4cfa",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 1911897,
+      "visible_pixels": 2282407,
+      "partial_alpha_pixels": 888043,
+      "bbox": [
+        0,
+        182,
+        2048,
+        1858
+      ]
+    },
+    {
+      "name": "poison_expand.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\poison_expand.png",
+      "source_sha256": "721d253c320c527c7bb3626e566e4bd9bc02633267c19b8bab10c20feeda2cc6",
+      "output_sha256": "05c46b998d8177d2478516455de555d48e0d7049cd9b3a6e0bf44b3a7ad68cbd",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 2569324,
+      "visible_pixels": 1624980,
+      "partial_alpha_pixels": 21731,
+      "bbox": [
+        45,
+        46,
+        2004,
+        2005
+      ]
+    },
+    {
+      "name": "poison_infect.png",
+      "source": "D:\\roguelite-Shooting-pixel\\public\\assets\\poison_infect.png",
+      "source_sha256": "82b442e3af86c9c1ec9e7237de8848bed6f357c7ca066dc78b61d84bddee2cb5",
+      "output_sha256": "94fab02080d1ee8a6220cf5eeb757fcab077c2fb1cf92b8aebbd9744216d2797",
+      "size": [
+        2048,
+        2048
+      ],
+      "alpha_only": true,
+      "transparent_pixels": 3389850,
+      "visible_pixels": 804454,
+      "partial_alpha_pixels": 8438,
+      "bbox": [
+        181,
+        144,
+        2048,
+        1607
+      ]
+    }
+  ],
+  "retained_opaque": [
+    "bg.png",
+    "HP_green.png",
+    "HP_red.png",
+    "HP_yellow.png"
+  ],
+  "already_transparent": 55
+}

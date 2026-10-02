@@ -514,7 +514,9 @@ export function useSound() {
   const initAudioContext = useCallback(() => {
     if (audioContextRef.current) return audioContextRef.current;
     
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return null;
+    const ctx = new AudioContextClass();
     audioContextRef.current = ctx;
     
     // 创建主音量节点

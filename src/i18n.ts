@@ -9,6 +9,8 @@ export const LOCALE_STORAGE_KEY = 'pixel_battle_language';
 interface Entry { zh: string; en: string }
 
 const dict: Record<string, Entry> = {
+  assetLoadFailed: { zh: '部分必要资源加载失败，请重试', en: 'Required assets failed to load. Please retry.' },
+  retryLoad: { zh: '重新加载', en: 'Retry loading' },
   // ===== 主菜单 =====
   menu: { zh: '主菜单', en: 'Main Menu' },
   startGame: { zh: '开始游戏', en: 'Start Game' },

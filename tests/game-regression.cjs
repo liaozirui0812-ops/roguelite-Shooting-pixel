@@ -674,3 +674,26 @@ test('penetration halves follow-up damage while the pistol last-shot exception r
     assert.equal(runtime.state.bullets.length, 0);
   }
 });
+
+test('restored map objects block walking and bullets while sampled dash collision remains valid', () => {
+  const { checkCollisionWithObstacle } = require('../src/game/rules/geometry.ts');
+  const runtime = live(), context = fixture(runtime);
+  const obstacle = { id: 'restored', x: 3060, y: 2960, width: 100, height: 80,
+    collisionWidth: 70, collisionHeight: 56, image: '/assets/obstacle_1.png' };
+  runtime.state.obstacles = [obstacle]; runtime.state.keys = new Set(['d']);
+  context.checkRectCollision = (position, radius, object) => checkCollisionWithObstacle(position.x, position.y, radius, object);
+  for (let i = 0; i < 60; i++) runtime.step(() => updateWorld(context));
+  assert.ok(runtime.state.player.x <= 3050); assert.ok(runtime.state.player.x > 3000);
+  runtime.state.keys.clear();
+  runtime.state.bullets = [{ id: 'blocked', x: 3050, y: 3000, vx: 10, vy: 0,
+    weapon: 'pistol', size: 5, actualDamage: 5, isCrit: false, penetration: 0, hitCount: 0,
+    range: 800, startX: 3050, startY: 3000 }];
+  for (let i = 0; i < 10; i++) runtime.step(() => updateWorld(context));
+  assert.equal(runtime.state.bullets.length, 0);
+  runtime.state.keys.add('d'); context.dashPendingRef.current = true;
+  for (let i = 0; i < 30; i++) {
+    runtime.step(() => updateWorld(context));
+    assert.equal(checkCollisionWithObstacle(runtime.state.player.x, runtime.state.player.y, 25, obstacle), false);
+  }
+  assert.equal(context.dashRef.current.active, false);
+});

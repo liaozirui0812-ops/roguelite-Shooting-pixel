@@ -28,6 +28,12 @@ const dict: Record<string, Entry> = {
   clickToMute: { zh: '点击静音', en: 'Click to mute' },
   closeHint: { zh: '关闭', en: 'Close' },
   language: { zh: '语言', en: 'Language' },
+  lighting: { zh: '光影质量', en: 'Lighting quality' },
+  lightingOff: { zh: '关闭', en: 'Off' },
+  lightingBasic: { zh: '基础照明', en: 'Basic' },
+  lightingStandard: { zh: '标准法线', en: 'Standard' },
+  lightingHigh: { zh: '精细边缘', en: 'High' },
+  lightingSteps: { zh: '四级明暗', en: 'Four light levels' },
   languageZh: { zh: '中文', en: 'Chinese' },
   languageEn: { zh: '英文', en: 'English' },
 

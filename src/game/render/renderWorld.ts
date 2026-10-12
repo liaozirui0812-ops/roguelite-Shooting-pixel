@@ -1,4 +1,3 @@
-import { SPRITE_ATLASES, atlasFrame } from '@/game/assets/atlases';
 import { deriveCombatStats } from '@/game/rules/combatStats';
 import type React from 'react';
 import {
@@ -12,8 +11,11 @@ import {
 } from '@/game';
 import type { GameRuntime } from '@/game/runtime/GameRuntime';
 import type { GameWorld } from '@/game/model/World';
+import { LightingRenderer, obstacleAssetId } from './lighting/lightingRenderer';
+import { monsterSprite, playerSprite, drawOriginalSprite, type LitSprite, type SpriteImages } from './lighting/spriteLayout';
 
 export interface RenderWorldContext {
+  lighting?: LightingRenderer | null;
   t: (key: string) => string;
   world: GameWorld;
   runtime: GameRuntime<GameWorld>;
@@ -545,6 +547,41 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
   const cameraX = clampedCamX - halfW + shakeOffX;
   const cameraY = clampedCamY - halfH + shakeOffY;
 
+  const lighting = context.lighting;
+  const images: SpriteImages = { playerIdle: playerIdleImage, playerWalk: playerWalkImage,
+    playerDash: playerDashImage, enemy_1: enemy_1Image, enemy_2: enemy_2Image,
+    enemy_3: enemy_3Image, enemy_4_1: enemy_4_1Image, enemy_4_2: enemy_4_2Image,
+    boss: bossImage, boss2: boss2Image };
+  const obstacleSprites = new Map<string, LitSprite>();
+  for (const obstacle of world.obstacles) {
+    const asset = obstacleAssetId(obstacle.image), image = obstacleImages[obstacle.image];
+    if (!asset || !image) continue;
+    images[asset] = image;
+    obstacleSprites.set(obstacle.id, { id: 'obstacle:' + obstacle.id, asset, image,
+      source: { x: 0, y: 0, width: image.width, height: image.height },
+      dest: { x: obstacle.x, y: obstacle.y, width: obstacle.width, height: obstacle.height }, flip: false });
+  }
+  const monsterSprites = new Map(world.monsters.map(monster => [monster.id, monsterSprite(monster, now, images)]));
+  // Keep the existing aiming/mirror contract; light coordinates use the actual camera instead.
+  const bounds = canvas.getBoundingClientRect();
+  const aim = Math.atan2(world.mousePos.y - bounds.top - GAME_CONFIG.CANVAS_HEIGHT / 2,
+    world.mousePos.x - bounds.left - GAME_CONFIG.CANVAS_WIDTH / 2);
+  const degrees = (aim * 180 / Math.PI + 360) % 360;
+  const playerBody = playerSprite(world.player, now, images, dashRef.current, degrees <= 90 || degrees > 270);
+  if (lighting) lighting.prepareFrame({ width: canvas.width, height: canvas.height,
+    camera: { x: cameraX, y: cameraY }, light: { x: world.player.x, y: world.player.y }, images,
+    sprites: [...obstacleSprites.values(), ...[...monsterSprites.values()].filter((s): s is LitSprite => !!s),
+      ...(playerBody ? [playerBody] : [])] });
+  const drawBody = (sprite: LitSprite) => {
+    if (lighting) { lighting.drawShadow(ctx, sprite); lighting.drawSprite(ctx, sprite); }
+    else drawOriginalSprite(ctx, sprite);
+  };
+  // Readability overlays retain their order and world positions, after the world light multiplier.
+  const overlays: (() => void)[] = [];
+  const overlay = (draw: () => void) => {
+    if (lighting?.metrics.mode !== 'off' && lighting) overlays.push(draw); else draw();
+  };
+
   // 应用摄像机变换
   if (!baseTransformRef.current) {
     baseTransformRef.current = ctx.getTransform();
@@ -581,7 +618,9 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
     if (obstacleImg) {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(obstacleImg, obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+      const sprite = obstacleSprites.get(obstacle.id);
+      if (sprite) drawBody(sprite);
+      else ctx.drawImage(obstacleImg, obstacle.x, obstacle.y, obstacle.width, obstacle.height);
       ctx.restore();
     } else {
       // 降级：绘制占位矩形
@@ -727,6 +766,7 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
     const monsterColor = isHitEffect || isDyingEffect ? '#ffffff' : config.color;
     const monsterSize = config.size;
     const isBoss = monster.isBoss;
+    const sprite = monsterSprites.get(monster.id);
 
     // 处决闪红效果（在敌人周围绘制红色闪烁光晕）
     if (isExecutionEffect && monster.executionTime) {
@@ -757,139 +797,30 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
     if (isBoss) {
       const jumpAttackState = monster.jumpAttackState || 'idle';
 
-      // 绘制range图标（锁定、起跳、空中、落地阶段显示）
-      if (
-        (jumpAttackState === 'locking' ||
-          jumpAttackState === 'jump_start' ||
-          jumpAttackState === 'airborne' ||
-          jumpAttackState === 'landing') &&
-        rangeImage &&
-        monster.jumpAttackTargetX !== undefined &&
-        monster.jumpAttackTargetY !== undefined
-      ) {
-        const targetX = monster.jumpAttackTargetX;
-        const targetY = monster.jumpAttackTargetY;
-        const rangeSize = 150; // range图标大小（原来的1.5倍）
+      overlay(() => {
+        // 绘制range图标（锁定、起跳、空中、落地阶段显示）
+        if (
+          (jumpAttackState === 'locking' ||
+            jumpAttackState === 'jump_start' ||
+            jumpAttackState === 'airborne' ||
+            jumpAttackState === 'landing') &&
+          rangeImage &&
+          monster.jumpAttackTargetX !== undefined &&
+          monster.jumpAttackTargetY !== undefined
+        ) {
+          const targetX = monster.jumpAttackTargetX;
+          const targetY = monster.jumpAttackTargetY;
+          const rangeSize = 150; // range图标大小（原来的1.5倍）
 
-        ctx.save();
-        ctx.translate(targetX, targetY);
-        ctx.drawImage(rangeImage, -rangeSize / 2, -rangeSize / 2, rangeSize, rangeSize);
-        ctx.restore();
-      }
-
-      // BOSS动画选择
-      let bossAnimImage = bossImage; // 默认使用boss_1
-      if (
-        (jumpAttackState === 'jump_start' ||
-          jumpAttackState === 'airborne' ||
-          jumpAttackState === 'landing') &&
-        boss2Image
-      ) {
-        bossAnimImage = boss2Image; // 落地攻击使用boss_2
-      }
-
-      // BOSS使用序列帧动画
-      if (bossAnimImage) {
-        // 根据动画图片确定总帧数
-        const bossAtlas = bossAnimImage === boss2Image ? SPRITE_ATLASES.boss2 : SPRITE_ATLASES.boss;
-        const totalFrames = bossAtlas.frames.length;
-        let bossFrameIndex = 0;
-
-        // 根据状态计算帧索引和时长
-        if (jumpAttackState === 'jump_start') {
-          // 起跳阶段（900ms）
-          const jumpStartDuration = config.jumpStartDuration || 900;
-          const jumpStartElapsed = now - (monster.jumpAttackStartTime || now);
-
-          if (bossAnimImage === boss2Image) {
-            // boss_2: 9帧（索引0-8），每帧100ms
-            const jumpStartFrames = 9;
-            const frameDuration = jumpStartDuration / jumpStartFrames;
-            bossFrameIndex = Math.min(
-              Math.floor(jumpStartElapsed / frameDuration),
-              jumpStartFrames - 1
-            );
-          } else {
-            // boss_1: 2帧（索引0-1），每帧450ms
-            const jumpStartFrames = 2;
-            const frameDuration = jumpStartDuration / jumpStartFrames;
-            bossFrameIndex = Math.min(
-              Math.floor(jumpStartElapsed / frameDuration),
-              jumpStartFrames - 1
-            );
-          }
-        } else if (jumpAttackState === 'airborne') {
-          // 空中阶段（1600ms）
-          const airborneDuration = config.airborneDuration || 1600;
-          const airborneElapsed = now - (monster.jumpAttackStartTime || now);
-
-          if (bossAnimImage === boss2Image) {
-            // boss_2: 9帧（索引9-17），每帧约177.78ms
-            const airborneFrames = 9;
-            const frameDuration = airborneDuration / airborneFrames;
-            bossFrameIndex =
-              9 + Math.min(Math.floor(airborneElapsed / frameDuration), airborneFrames - 1);
-          } else {
-            // boss_1: 4帧（索引2-5），每帧400ms
-            const airborneFrames = 4;
-            const frameDuration = airborneDuration / airborneFrames;
-            bossFrameIndex =
-              2 + Math.min(Math.floor(airborneElapsed / frameDuration), airborneFrames - 1);
-          }
-        } else if (jumpAttackState === 'landing') {
-          // 落地阶段（500ms）
-          const landingDuration = 500;
-          const landingElapsed = now - (monster.jumpAttackStartTime || now);
-
-          if (bossAnimImage === boss2Image) {
-            // boss_2: 2帧（索引18-19），每帧250ms
-            const landingFrames = 2;
-            const frameDuration = landingDuration / landingFrames;
-            bossFrameIndex =
-              18 + Math.min(Math.floor(landingElapsed / frameDuration), landingFrames - 1);
-          } else {
-            // boss_1: 2帧（索引6-7），每帧250ms
-            const landingFrames = 2;
-            const frameDuration = landingDuration / landingFrames;
-            bossFrameIndex =
-              6 + Math.min(Math.floor(landingElapsed / frameDuration), landingFrames - 1);
-          }
-        } else {
-          // 默认动画：循环播放
-          const bossFrameDuration = bossAnimImage === boss2Image ? 50 : 100; // boss_2每帧50ms，boss_1每帧100ms
-          const bossTotalDuration = bossFrameDuration * totalFrames;
-          bossFrameIndex = Math.floor((now % bossTotalDuration) / bossFrameDuration);
+          ctx.save();
+          ctx.translate(targetX, targetY);
+          ctx.drawImage(rangeImage, -rangeSize / 2, -rangeSize / 2, rangeSize, rangeSize);
+          ctx.restore();
         }
+      });
 
-        // boss_1是8帧，boss_2是20帧，都是水平排列，每帧512x512px
-        const bossFrame = atlasFrame(bossAtlas, bossFrameIndex);
-        const bossFrameWidth = bossFrame.width;
-        const bossFrameHeight = bossFrame.height;
-
-        // 绘制BOSS序列帧
-        ctx.save();
-        ctx.translate(monster.x, monster.y);
-        // BOSS尺寸放大到原来的3.25倍（2.5 * 1.3）
-        let bossDisplaySize = monsterSize * 3.25;
-        // 砸地攻击阶段额外放大20%
-        if (jumpAttackState === 'landing') {
-          bossDisplaySize *= 1.2;
-        }
-
-        ctx.drawImage(
-          bossAnimImage,
-          bossFrame.x, // 源X
-          0, // 源Y
-          bossFrameWidth, // 源宽度
-          bossFrameHeight, // 源高度
-          -bossDisplaySize / 2, // 目标X（居中）
-          -bossDisplaySize / 2, // 目标Y（居中）
-          bossDisplaySize, // 目标宽度
-          bossDisplaySize // 目标高度
-        );
-
-        ctx.restore();
-      }
+      const bossAnimImage = sprite?.image;
+      if (sprite) drawBody(sprite);
 
       // BOSS光环效果（备用）- 当bossAnimImage为null时
       if (!bossAnimImage && isBoss) {
@@ -998,158 +929,38 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
         ctx.fill();
       }
 
-      // BOSS血条（仅在非死亡状态下显示）
-      if (isBoss && !monster.isDying) {
-        const hpBarWidth = monsterSize * 1.25;
-        const hpBarHeight = 12;
-        const hpPercent = monster.hp / monster.maxHp;
+      overlay(() => {
+        // BOSS血条（仅在非死亡状态下显示）
+        if (isBoss && !monster.isDying) {
+          const hpBarWidth = monsterSize * 1.25;
+          const hpBarHeight = 12;
+          const hpPercent = monster.hp / monster.maxHp;
 
-        // 血条背景
-        ctx.fillStyle = '#333';
-        ctx.fillRect(
-          monster.x - hpBarWidth / 2,
-          monster.y - monsterSize - 15,
-          hpBarWidth,
-          hpBarHeight
-        );
+          // 血条背景
+          ctx.fillStyle = '#333';
+          ctx.fillRect(
+            monster.x - hpBarWidth / 2,
+            monster.y - monsterSize - 15,
+            hpBarWidth,
+            hpBarHeight
+          );
 
-        // 血条前景（绿色>30%，红色<=30%）
-        ctx.fillStyle = hpPercent > 0.3 ? '#4ade80' : '#ef4444';
-        ctx.fillRect(
-          monster.x - hpBarWidth / 2,
-          monster.y - monsterSize - 15,
-          hpBarWidth * hpPercent,
-          hpBarHeight
-        );
-      }
+          // 血条前景（绿色>30%，红色<=30%）
+          ctx.fillStyle = hpPercent > 0.3 ? '#4ade80' : '#ef4444';
+          ctx.fillRect(
+            monster.x - hpBarWidth / 2,
+            monster.y - monsterSize - 15,
+            hpBarWidth * hpPercent,
+            hpBarHeight
+          );
+        }
+      });
+
     } else {
-      // 普通怪物 - 使用序列帧动画
-      let enemyFrameDuration = 100; // 每帧100ms
-      let enemyTotalFrames = 7; // 7帧
-      let enemyTotalDuration = enemyFrameDuration * enemyTotalFrames; // 700ms
-
-      // 根据怪物类型选择对应的图片
-      let enemyImage = null;
-      let isEnemy4 = false; // 是否是敌人4
-
-      if (monster.monsterType === 1) {
-        enemyImage = enemy_1Image;
-      } else if (monster.monsterType === 2) {
-        enemyImage = enemy_2Image;
-      } else if (monster.monsterType === 3) {
-        enemyImage = enemy_3Image;
-      } else if (monster.monsterType === 4) {
-        isEnemy4 = true;
-
-        // 敌人4特殊动画逻辑
-        if (monster.isShooting && enemy_4_2Image) {
-          // 正在播放射击动画（4_2）
-          enemyFrameDuration = 100; // 敌人4每帧100ms
-          enemyTotalFrames = SPRITE_ATLASES.enemy_4_2.frames.length; // 假设每帧256px宽
-          enemyTotalDuration = enemyFrameDuration * enemyTotalFrames;
-
-          const animationDuration = enemyTotalDuration;
-          const timeSinceShootStart = now - (monster.shootAnimationStartTime || 0);
-
-          if (timeSinceShootStart >= animationDuration) {
-            // 完整的4_2动画播放完成，切换回4_1
-            if (enemy_4_1Image) {
-              enemyImage = enemy_4_1Image;
-              enemyFrameDuration = 100;
-              enemyTotalFrames = SPRITE_ATLASES.enemy_4_1.frames.length;
-              enemyTotalDuration = enemyFrameDuration * enemyTotalFrames;
-            }
-          } else {
-            // 继续播放4_2动画
-            enemyImage = enemy_4_2Image;
-          }
-        } else {
-          // 没有射击，使用4_1动画（Walk循环）
-          if (enemy_4_1Image) {
-            enemyImage = enemy_4_1Image;
-            enemyFrameDuration = 100;
-            enemyTotalFrames = SPRITE_ATLASES.enemy_4_1.frames.length;
-            enemyTotalDuration = enemyFrameDuration * enemyTotalFrames;
-          }
-        }
-      }
-
-      // 使用序列帧动画
-      if (enemyImage) {
-        // 计算当前帧
-        let enemyFrameIndex;
-        if (isEnemy4 && monster.isShooting && enemyImage === enemy_4_2Image) {
-          // 敌人4正在播放射击动画，使用相对于射击开始时间的帧索引
-          const timeSinceShootStart = now - (monster.shootAnimationStartTime || 0);
-          enemyFrameIndex = Math.floor(timeSinceShootStart / enemyFrameDuration) % enemyTotalFrames;
-        } else {
-          // 循环播放Walk动画
-          enemyFrameIndex = Math.floor((now % enemyTotalDuration) / enemyFrameDuration);
-        }
-
-        // 敌人精灵表是水平排列的帧，每帧256x256px
-        const enemyAtlas =
-          monster.monsterType === 4
-            ? enemyImage === enemy_4_2Image
-              ? SPRITE_ATLASES.enemy_4_2
-              : SPRITE_ATLASES.enemy_4_1
-            : SPRITE_ATLASES[
-                monster.monsterType === 2
-                  ? 'enemy_2'
-                  : monster.monsterType === 3
-                    ? 'enemy_3'
-                    : 'enemy_1'
-              ];
-        const enemyFrame = atlasFrame(enemyAtlas, enemyFrameIndex);
-        const enemyFrameWidth = enemyFrame.width;
-        const enemyFrameHeight = enemyImage.height;
-
-        // 计算移动方向并判断是否需要镜像
-        const isMovingRight = monster.vx > 0.01;
-
-        // 根据怪物类型决定镜像规则
-        let shouldMirror = false;
-        if (
-          monster.monsterType === 1 ||
-          monster.monsterType === 2 ||
-          monster.monsterType === 4 ||
-          monster.monsterType === 5
-        ) {
-          // 类型1、2、4、boss：往右走时镜像（正常面朝左）
-          shouldMirror = isMovingRight;
-        } else if (monster.monsterType === 3) {
-          // 类型3：往左走时镜像（正常面朝右）
-          shouldMirror = !isMovingRight;
-        }
-
-        // 绘制敌人序列帧
+      if (sprite) {
         ctx.save();
-        ctx.translate(monster.x, monster.y);
-
-        // 如果需要镜像，水平翻转
-        if (shouldMirror) {
-          ctx.scale(-1, 1);
-        }
-
-        // 怪物尺寸（根据类型调整）
-        const displaySize = monsterSize * 1.5;
-
-        // 如果受击或死亡，使用叠加白色效果
-        if (isHitEffect || isDyingEffect) {
-          ctx.filter = 'brightness(2)'; // 提亮2倍，形成白色效果
-        }
-
-        ctx.drawImage(
-          enemyImage,
-          enemyFrame.x, // 源X
-          0, // 源Y
-          enemyFrameWidth, // 源宽度
-          enemyFrameHeight, // 源高度
-          -displaySize / 2, // 目标X（居中）
-          -displaySize / 2, // 目标Y（居中）
-          displaySize, // 目标宽度
-          displaySize // 目标高度
-        );
+        if (isHitEffect || isDyingEffect) ctx.filter = 'brightness(2)';
+        drawBody(sprite);
         ctx.restore();
       } else {
         // 备用：如果没有加载图片，使用原来的绘制方式
@@ -1173,77 +984,79 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
     // ========== 词缀视觉渲染（在怪物 sprite 之上、血条之下） ==========
     AffixSystem.render(ctx, monster, monsterSize, isBoss, now);
 
-    // 血条（死亡的怪物不显示血条，满血的怪物也不显示血条）
-    if (!monster.isDying && monster.hp < monster.maxHp) {
-      // 血条粗短：高度翻倍，长度减半
-      const hpBarWidth = isBoss ? monsterSize * 1.25 : monsterSize * 1.0;
-      const hpBarHeight = isBoss ? 12 : 8;
-      const hpPercent = monster.hp / monster.maxHp;
+    overlay(() => {
+      // 血条（死亡的怪物不显示血条，满血的怪物也不显示血条）
+      if (!monster.isDying && monster.hp < monster.maxHp) {
+        // 血条粗短：高度翻倍，长度减半
+        const hpBarWidth = isBoss ? monsterSize * 1.25 : monsterSize * 1.0;
+        const hpBarHeight = isBoss ? 12 : 8;
+        const hpPercent = monster.hp / monster.maxHp;
 
-      ctx.fillStyle = '#333';
-      ctx.fillRect(
-        monster.x - hpBarWidth / 2,
-        monster.y - monsterSize - 15,
-        hpBarWidth,
-        hpBarHeight
-      );
+        ctx.fillStyle = '#333';
+        ctx.fillRect(
+          monster.x - hpBarWidth / 2,
+          monster.y - monsterSize - 15,
+          hpBarWidth,
+          hpBarHeight
+        );
 
-      ctx.fillStyle = hpPercent > 0.3 ? '#4ade80' : '#ef4444';
-      ctx.fillRect(
-        monster.x - hpBarWidth / 2,
-        monster.y - monsterSize - 15,
-        hpBarWidth * hpPercent,
-        hpBarHeight
-      );
-    }
+        ctx.fillStyle = hpPercent > 0.3 ? '#4ade80' : '#ef4444';
+        ctx.fillRect(
+          monster.x - hpBarWidth / 2,
+          monster.y - monsterSize - 15,
+          hpBarWidth * hpPercent,
+          hpBarHeight
+        );
+      }
 
-    // ========== 词缀血条下方 UI（如护盾方格） ==========
-    AffixSystem.renderBelowHpBar(ctx, monster, monsterSize, isBoss);
+      // ========== 词缀血条下方 UI（如护盾方格） ==========
+      AffixSystem.renderBelowHpBar(ctx, monster, monsterSize, isBoss);
 
-    // 燃烧效果渲染（轻量版：血条上方显示橙色火苗图标+层数，去掉高开销的渐变光晕与旋转粒子）
-    if (monster.isBurning && !monster.isDying) {
-      const stackCount = monster.burningStacks || 1;
-      const fx = monster.x;
-      const fy = monster.y - monsterSize - (isBoss ? 30 : 22);
+      // 燃烧效果渲染（轻量版：血条上方显示橙色火苗图标+层数，去掉高开销的渐变光晕与旋转粒子）
+      if (monster.isBurning && !monster.isDying) {
+        const stackCount = monster.burningStacks || 1;
+        const fx = monster.x;
+        const fy = monster.y - monsterSize - (isBoss ? 30 : 22);
 
-      // 简橙色火苗图标
-      const flicker = 1 + Math.sin(now / 80) * 0.1;
-      ctx.fillStyle = '#ff8800';
-      ctx.beginPath();
-      ctx.moveTo(fx - 7 * flicker, fy + 4);
-      ctx.quadraticCurveTo(fx - 9 * flicker, fy - 1, fx - 3, fy - 4);
-      ctx.quadraticCurveTo(fx - 4, fy - 8, fx + 1, fy - 9);
-      ctx.quadraticCurveTo(fx + 5, fy - 8, fx + 5, fy - 4);
-      ctx.quadraticCurveTo(fx + 9, fy - 2, fx + 7, fy + 4);
-      ctx.quadraticCurveTo(fx + 2, fy + 6, fx - 7, fy + 4);
-      ctx.fill();
+        // 简橙色火苗图标
+        const flicker = 1 + Math.sin(now / 80) * 0.1;
+        ctx.fillStyle = '#ff8800';
+        ctx.beginPath();
+        ctx.moveTo(fx - 7 * flicker, fy + 4);
+        ctx.quadraticCurveTo(fx - 9 * flicker, fy - 1, fx - 3, fy - 4);
+        ctx.quadraticCurveTo(fx - 4, fy - 8, fx + 1, fy - 9);
+        ctx.quadraticCurveTo(fx + 5, fy - 8, fx + 5, fy - 4);
+        ctx.quadraticCurveTo(fx + 9, fy - 2, fx + 7, fy + 4);
+        ctx.quadraticCurveTo(fx + 2, fy + 6, fx - 7, fy + 4);
+        ctx.fill();
 
-      // 燃烧层数
-      ctx.fillStyle = '#ff7700';
-      ctx.font = 'bold 11px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText(`×${stackCount}`, fx + 14, fy + 4);
-    }
+        // 燃烧层数
+        ctx.fillStyle = '#ff7700';
+        ctx.font = 'bold 11px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`×${stackCount}`, fx + 14, fy + 4);
+      }
 
-    // 中毒效果渲染（轻量版：血条上方显示绿色毒滴图标+层数，去掉高开销的渐变光晕与气泡粒子）
-    if (monster.isPoisoned && !monster.isDying) {
-      const poisonStackCount = monster.poisonStacks || 1;
-      const px = monster.x;
-      const py = monster.y - monsterSize - (isBoss ? 42 : 34);
+      // 中毒效果渲染（轻量版：血条上方显示绿色毒滴图标+层数，去掉高开销的渐变光晕与气泡粒子）
+      if (monster.isPoisoned && !monster.isDying) {
+        const poisonStackCount = monster.poisonStacks || 1;
+        const px = monster.x;
+        const py = monster.y - monsterSize - (isBoss ? 42 : 34);
 
-      // 绿色毒滴图标
-      ctx.fillStyle = '#00cc66';
-      ctx.beginPath();
-      ctx.arc(px, py, 4, 0.3 * Math.PI, 0.9 * Math.PI);
-      ctx.arc(px, py - 1, 3, 1.1 * Math.PI, 1.9 * Math.PI);
-      ctx.fill();
+        // 绿色毒滴图标
+        ctx.fillStyle = '#00cc66';
+        ctx.beginPath();
+        ctx.arc(px, py, 4, 0.3 * Math.PI, 0.9 * Math.PI);
+        ctx.arc(px, py - 1, 3, 1.1 * Math.PI, 1.9 * Math.PI);
+        ctx.fill();
 
-      // 中毒层数
-      ctx.fillStyle = '#00dd66';
-      ctx.font = 'bold 11px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText(`×${poisonStackCount}`, px + 14, py + 3);
-    }
+        // 中毒层数
+        ctx.fillStyle = '#00dd66';
+        ctx.font = 'bold 11px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`×${poisonStackCount}`, px + 14, py + 3);
+      }
+    });
 
     // BOSS死亡爆炸效果
     if (isBoss && monster.isDying) {
@@ -1652,202 +1465,209 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
     ctx.restore();
   });
 
-  // —— 以下为屏幕固定 HUD（脱离摄像机/地图变换）——
-  ctx.save();
-  if (baseTransformRef.current) {
-    ctx.setTransform(baseTransformRef.current);
-  }
-
-  // 闪现技能图标（右下角圆形）+ 冷却遮罩与倒计时
-  if (world.gameState === 'playing') {
-    const dashCenterX = GAME_CONFIG.CANVAS_WIDTH - 86;
-    const dashCenterY = GAME_CONFIG.CANVAS_HEIGHT - 86;
-    const dashRadius = 40;
-    const cdRatio = world.dashCooldown > 0 ? Math.min(1, world.dashCooldown / DASH_COOLDOWN_MS) : 0;
+  const drawDashHud = () => {
+    // —— 以下为屏幕固定 HUD（脱离摄像机/地图变换）——
     ctx.save();
-    ctx.translate(dashCenterX, dashCenterY);
-    // 底环
-    ctx.beginPath();
-    ctx.arc(0, 0, dashRadius, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.fill();
-    ctx.strokeStyle = cdRatio > 0 ? 'rgba(255,255,255,0.5)' : '#ffd75e';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    // 图标（圆形裁剪）
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(0, 0, dashRadius - 4, 0, Math.PI * 2);
-    ctx.clip();
-    if (skillIconImage) {
-      const dw = dashRadius * 2 - 8;
-      ctx.drawImage(
-        skillIconImage,
-        (200 - dw) / 2,
-        (200 - dw) / 2,
-        dw,
-        dw,
-        -dw / 2,
-        -dw / 2,
-        dw,
-        dw
-      );
+    if (baseTransformRef.current) {
+      ctx.setTransform(baseTransformRef.current);
     }
-    ctx.restore();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    if (cdRatio > 0) {
-      // 冷却置暗：暗色扇区面积随冷却剩余减少而减小（从整圆收缩到消失）
+
+    // 闪现技能图标（右下角圆形）+ 冷却遮罩与倒计时
+    if (world.gameState === 'playing') {
+      const dashCenterX = GAME_CONFIG.CANVAS_WIDTH - 86;
+      const dashCenterY = GAME_CONFIG.CANVAS_HEIGHT - 86;
+      const dashRadius = 40;
+      const cdRatio = world.dashCooldown > 0 ? Math.min(1, world.dashCooldown / DASH_COOLDOWN_MS) : 0;
       ctx.save();
-      ctx.globalAlpha = 0.6;
-      ctx.fillStyle = 'rgba(8,8,14,1)';
+      ctx.translate(dashCenterX, dashCenterY);
+      // 底环
       ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, dashRadius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * cdRatio);
-      ctx.closePath();
+      ctx.arc(0, 0, dashRadius, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
       ctx.fill();
+      ctx.strokeStyle = cdRatio > 0 ? 'rgba(255,255,255,0.5)' : '#ffd75e';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      // 图标（圆形裁剪）
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, dashRadius - 4, 0, Math.PI * 2);
+      ctx.clip();
+      if (skillIconImage) {
+        const dw = dashRadius * 2 - 8;
+        ctx.drawImage(
+          skillIconImage,
+          (200 - dw) / 2,
+          (200 - dw) / 2,
+          dw,
+          dw,
+          -dw / 2,
+          -dw / 2,
+          dw,
+          dw
+        );
+      }
       ctx.restore();
-      // 中央倒计时（向上取整的剩余秒数）
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = '#ffffff';
-      ctx.font = "bold 18px 'Ark Pixel', Arial";
-      const cdSecs = Math.max(0, Math.ceil(world.dashCooldown / 1000));
-      ctx.fillText(String(cdSecs), 0, 2);
-    } else {
-      // 可用状态提示 E
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = '#ffffff';
-      ctx.font = "bold 14px 'Ark Pixel', Arial";
-      ctx.fillText('E', 0, 1);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      if (cdRatio > 0) {
+        // 冷却置暗：暗色扇区面积随冷却剩余减少而减小（从整圆收缩到消失）
+        ctx.save();
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = 'rgba(8,8,14,1)';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, dashRadius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * cdRatio);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        // 中央倒计时（向上取整的剩余秒数）
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = "bold 18px 'Ark Pixel', Arial";
+        const cdSecs = Math.max(0, Math.ceil(world.dashCooldown / 1000));
+        ctx.fillText(String(cdSecs), 0, 2);
+      } else {
+        // 可用状态提示 E
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = "bold 14px 'Ark Pixel', Arial";
+        ctx.fillText('E', 0, 1);
+      }
+      ctx.restore();
     }
+
     ctx.restore();
-  }
+  };
+  overlay(drawDashHud);
 
-  ctx.restore(); // 恢复摄像机变换（HUD 屏幕固定块结束）
 
-  // 绘制伤害数字（只读，不修改状态）
-  world.damageNumbers.forEach((damageNum) => {
-    ctx.save();
 
-    // 处决飘字特殊处理
-    if (damageNum.isExecution) {
-      const baseFontSize = 36;
+  overlay(() => {
+    // 绘制伤害数字（只读，不修改状态）
+    world.damageNumbers.forEach((damageNum) => {
+      ctx.save();
+
+      // 处决飘字特殊处理
+      if (damageNum.isExecution) {
+        const baseFontSize = 36;
+        const fontSize = Math.round(baseFontSize * damageNum.scale);
+        const adjustedFontSize = Math.round(fontSize / 10) * 10;
+
+        ctx.font = `bold ${adjustedFontSize}px 'Ark Pixel', Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.globalAlpha = damageNum.opacity;
+
+        // 红色描边
+        ctx.strokeStyle = '#880000';
+        ctx.lineWidth = 4;
+        ctx.strokeText('处决！！', damageNum.x, damageNum.y);
+
+        // 红色填充
+        ctx.fillStyle = '#ff0000';
+        ctx.fillText('处决！！', damageNum.x, damageNum.y);
+
+        ctx.restore();
+        return;
+      }
+
+      // 护盾抵挡飘字特殊处理
+      if (damageNum.isShieldBlock) {
+        const baseFontSize = 18;
+        const fontSize = Math.round(baseFontSize * damageNum.scale);
+
+        ctx.font = `bold ${fontSize}px 'Ark Pixel', Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.globalAlpha = damageNum.opacity;
+
+        // 蓝色描边
+        ctx.strokeStyle = '#1e3a8a';
+        ctx.lineWidth = 3;
+        ctx.strokeText('格挡', damageNum.x, damageNum.y);
+
+        // 蓝色填充
+        ctx.fillStyle = '#60a5fa';
+        ctx.fillText('格挡', damageNum.x, damageNum.y);
+
+        ctx.restore();
+        return;
+      }
+
+      // 像素字体需要在特定尺寸下清晰显示
+      // 使用10的倍数（20px, 30px等）
+      // 二次暴击使用更大的字体
+      const baseFontSize = damageNum.isDoubleCrit ? 36 : damageNum.isCrit ? 30 : 20;
       const fontSize = Math.round(baseFontSize * damageNum.scale);
+      // 确保字体大小是10的倍数，像素字体特性
       const adjustedFontSize = Math.round(fontSize / 10) * 10;
 
       ctx.font = `bold ${adjustedFontSize}px 'Ark Pixel', Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.globalAlpha = damageNum.opacity;
 
-      // 红色描边
-      ctx.strokeStyle = '#880000';
-      ctx.lineWidth = 4;
-      ctx.strokeText('处决！！', damageNum.x, damageNum.y);
+      // 描边（黑色）
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 3;
+      ctx.strokeText(damageNum.damage.toString(), damageNum.x, damageNum.y);
 
-      // 红色填充
-      ctx.fillStyle = '#ff0000';
-      ctx.fillText('处决！！', damageNum.x, damageNum.y);
+      // 填充（二次暴击红色，暴击橙色，普通白色）
+      let damageColor;
+      if (damageNum.isDoubleCrit) {
+        damageColor = '#ff0000'; // 红色（二次暴击）
+      } else if (damageNum.isCrit) {
+        damageColor = '#ff9900'; // 橙色（暴击）
+      } else {
+        damageColor = '#ffffff'; // 白色（普通伤害）
+      }
+
+      ctx.fillStyle = damageColor;
+      ctx.fillText(damageNum.damage.toString(), damageNum.x, damageNum.y);
+
+      // 二次暴击：显示"二次暴击"文字
+      if (damageNum.isDoubleCrit) {
+        const textY = damageNum.y + adjustedFontSize * 0.8;
+        const smallFontSize = Math.round((adjustedFontSize * 0.5) / 10) * 10;
+        ctx.font = `bold ${smallFontSize}px 'Ark Pixel', Arial`;
+        ctx.strokeStyle = '#880000';
+        ctx.lineWidth = 2;
+        ctx.strokeText('二次暴击', damageNum.x, textY);
+        ctx.fillStyle = '#ff0000';
+        ctx.fillText('二次暴击', damageNum.x, textY);
+      }
 
       ctx.restore();
-      return;
-    }
+    });
 
-    // 护盾抵挡飘字特殊处理
-    if (damageNum.isShieldBlock) {
-      const baseFontSize = 18;
-      const fontSize = Math.round(baseFontSize * damageNum.scale);
+    // 绘制金币弹字（金色填充，黑色描边）
+    world.goldFloatingTexts.forEach((text) => {
+      ctx.save();
 
-      ctx.font = `bold ${fontSize}px 'Ark Pixel', Arial`;
+      // 字体大小（使用10的倍数以保持像素字体清晰）
+      const baseFontSize = 24;
+      const fontSize = Math.round(baseFontSize * text.scale);
+      const adjustedFontSize = Math.round(fontSize / 10) * 10;
+
+      ctx.font = `bold ${adjustedFontSize}px 'Ark Pixel', Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.globalAlpha = damageNum.opacity;
+      ctx.globalAlpha = text.opacity;
 
-      // 蓝色描边
-      ctx.strokeStyle = '#1e3a8a';
+      // 描边（黑色）
+      ctx.strokeStyle = '#000000';
       ctx.lineWidth = 3;
-      ctx.strokeText('格挡', damageNum.x, damageNum.y);
 
-      // 蓝色填充
-      ctx.fillStyle = '#60a5fa';
-      ctx.fillText('格挡', damageNum.x, damageNum.y);
+      // 使用自定义文字或默认格式
+      const displayText = text.text || `+${text.value}`;
+      ctx.strokeText(displayText, text.x, text.y);
+
+      // 填充（使用自定义颜色或默认金色）
+      ctx.fillStyle = text.color || '#FFD700';
+      ctx.fillText(displayText, text.x, text.y);
 
       ctx.restore();
-      return;
-    }
-
-    // 像素字体需要在特定尺寸下清晰显示
-    // 使用10的倍数（20px, 30px等）
-    // 二次暴击使用更大的字体
-    const baseFontSize = damageNum.isDoubleCrit ? 36 : damageNum.isCrit ? 30 : 20;
-    const fontSize = Math.round(baseFontSize * damageNum.scale);
-    // 确保字体大小是10的倍数，像素字体特性
-    const adjustedFontSize = Math.round(fontSize / 10) * 10;
-
-    ctx.font = `bold ${adjustedFontSize}px 'Ark Pixel', Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    // 描边（黑色）
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 3;
-    ctx.strokeText(damageNum.damage.toString(), damageNum.x, damageNum.y);
-
-    // 填充（二次暴击红色，暴击橙色，普通白色）
-    let damageColor;
-    if (damageNum.isDoubleCrit) {
-      damageColor = '#ff0000'; // 红色（二次暴击）
-    } else if (damageNum.isCrit) {
-      damageColor = '#ff9900'; // 橙色（暴击）
-    } else {
-      damageColor = '#ffffff'; // 白色（普通伤害）
-    }
-
-    ctx.fillStyle = damageColor;
-    ctx.fillText(damageNum.damage.toString(), damageNum.x, damageNum.y);
-
-    // 二次暴击：显示"二次暴击"文字
-    if (damageNum.isDoubleCrit) {
-      const textY = damageNum.y + adjustedFontSize * 0.8;
-      const smallFontSize = Math.round((adjustedFontSize * 0.5) / 10) * 10;
-      ctx.font = `bold ${smallFontSize}px 'Ark Pixel', Arial`;
-      ctx.strokeStyle = '#880000';
-      ctx.lineWidth = 2;
-      ctx.strokeText('二次暴击', damageNum.x, textY);
-      ctx.fillStyle = '#ff0000';
-      ctx.fillText('二次暴击', damageNum.x, textY);
-    }
-
-    ctx.restore();
-  });
-
-  // 绘制金币弹字（金色填充，黑色描边）
-  world.goldFloatingTexts.forEach((text) => {
-    ctx.save();
-
-    // 字体大小（使用10的倍数以保持像素字体清晰）
-    const baseFontSize = 24;
-    const fontSize = Math.round(baseFontSize * text.scale);
-    const adjustedFontSize = Math.round(fontSize / 10) * 10;
-
-    ctx.font = `bold ${adjustedFontSize}px 'Ark Pixel', Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.globalAlpha = text.opacity;
-
-    // 描边（黑色）
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 3;
-
-    // 使用自定义文字或默认格式
-    const displayText = text.text || `+${text.value}`;
-    ctx.strokeText(displayText, text.x, text.y);
-
-    // 填充（使用自定义颜色或默认金色）
-    ctx.fillStyle = text.color || '#FFD700';
-    ctx.fillText(displayText, text.x, text.y);
-
-    ctx.restore();
+    });
   });
 
   // 绘制烟雾效果（只读，不修改状态）
@@ -1990,108 +1810,18 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
     }
   }
 
-  // 绘制玩家（使用序列帧动画）
-  // 选择动画资源：移动时用走动动画，停止时用待机动画
-  const playerAnimImage = world.player.isMoving ? playerWalkImage : playerIdleImage;
-
-  // 闪现状态：使用 player_3 8帧动画，武器隐藏、不可攻击、无敌
+  // Player frame selection is shared with the normal pass; preserve hit tint and dash timing.
   const dashActive = dashRef.current.active;
-  const dashAtlas = SPRITE_ATLASES.playerDash;
-
-  // 检测是否受击闪红
-  const isPlayerHitEffect =
-    world.player.isHit && now - world.player.hitTime < GAME_CONFIG.HIT_EFFECT_DURATION;
-
-  if (playerAnimImage) {
-    ctx.save();
-
-    // 根据瞄准方向计算面朝方向
-    const canvasRect = canvas.getBoundingClientRect();
-    const aimAngle = Math.atan2(
-      world.mousePos.y - canvasRect.top - GAME_CONFIG.CANVAS_HEIGHT / 2,
-      world.mousePos.x - canvasRect.left - GAME_CONFIG.CANVAS_WIDTH / 2
-    );
-
-    // 规范化角度到0-360度
-    let normalizedAngle = ((aimAngle * 180) / Math.PI) % 360;
-    if (normalizedAngle < 0) {
-      normalizedAngle += 360;
-    }
-
-    // 判断是否需要镜像：0-90°或270-360°为右侧（需要镜像），90-270°为左侧（不镜像）
-    const shouldMirrorPlayer = normalizedAngle <= 90 || normalizedAngle > 270;
-
-    // 计算动画帧
-    const playerAtlas = world.player.isMoving
-      ? SPRITE_ATLASES.playerWalk
-      : SPRITE_ATLASES.playerIdle;
-    const totalFrames = playerAtlas.frames.length; // 走动10帧，待机9帧
-    const frameDuration = 100; // 每帧100ms
-    const animTime = now - world.player.animationStartTime;
-    const frameIndex = Math.floor(animTime / frameDuration) % totalFrames;
-
-    // 每帧大小（缩小为60%）
-    const frameWidth = 256 * 0.6;
-    const frameHeight = 192 * 0.6;
-
-    // 移动到玩家位置
-    ctx.translate(world.player.x, world.player.y);
-
-    // 闪现镜像依据移动方向：往左移动则镜像，往右移动则不镜像
-    if (dashActive && dashRef.current.active) {
-      if (dashRef.current.dirX < -0.01) {
-        ctx.scale(-1, 1);
-      }
-    } else if (shouldMirrorPlayer) {
-      ctx.scale(-1, 1);
-    }
-
-    // 绘制当前帧（闪现时使用 player_3 动画）
-    let srcImg = playerAnimImage;
-    let srcX = frameIndex * 256;
-    let srcW = 256;
-    let dashFrameIdx = 0;
-    if (dashActive && playerDashImage) {
-      dashFrameIdx = Math.floor(((now - dashRef.current.startTime) % 400) / 50);
-      if (dashFrameIdx < 0) dashFrameIdx = 7 - (-dashFrameIdx % 8);
-      srcImg = playerDashImage;
-      const dashFrame = atlasFrame(dashAtlas, dashFrameIdx);
-      srcX = dashFrame.x;
-      srcW = dashFrame.width;
-    }
-    ctx.drawImage(
-      srcImg,
-      srcX, // 源X（原尺寸）
-      0, // 源Y
-      srcW, // 源宽（原尺寸）
-      192, // 源高（原尺寸）
-      -frameWidth / 2, // 目标X（居中）
-      -frameHeight / 2, // 目标Y（居中）
-      frameWidth, // 目标宽（缩小后）
-      frameHeight // 目标高（缩小后）
-    );
-
-    // 受击闪红叠加层（根据人物形状）
+  const isPlayerHitEffect = world.player.isHit && now - world.player.hitTime < GAME_CONFIG.HIT_EFFECT_DURATION;
+  if (playerBody) {
+    drawBody(playerBody);
     if (isPlayerHitEffect && !dashActive) {
       ctx.save();
-      // 使用filter将人物变成红色
       ctx.filter = 'brightness(1.2) sepia(1) saturate(3) hue-rotate(-50deg)';
       ctx.globalAlpha = 0.7;
-      ctx.drawImage(
-        playerAnimImage,
-        frameIndex * 256, // 源X（原尺寸）
-        0, // 源Y
-        256, // 源宽（原尺寸）
-        192, // 源高（原尺寸）
-        -frameWidth / 2, // 目标X（居中）
-        -frameHeight / 2, // 目标Y（居中）
-        frameWidth, // 目标宽（缩小后）
-        frameHeight // 目标高（缩小后）
-      );
+      if (lighting) lighting.drawSprite(ctx, playerBody); else drawOriginalSprite(ctx, playerBody);
       ctx.restore();
     }
-
-    ctx.restore();
   } else {
     // 备用绘制（如果图片未加载）：使用简单图形
     const isPlayerHitEffect =
@@ -2304,49 +2034,51 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
     ctx.stroke();
   }
 
-  // 绘制换弹进度条和图标
-  if (world.player.isReloading) {
-    const weaponConfig = WEAPONS[world.player.weapon];
-    // 狂暴状态：换弹速度+30%
-    const desperateActive = isDesperateFightActive(world.player);
-    const effectiveReloadBonus = world.player.reloadSpeedBonus + (desperateActive ? 30 : 0);
-    const effectiveReloadTime = deriveCombatStats(world.player, runtime.now()).reloadTime;
-    const elapsed = now - world.player.reloadStartTime;
-    const progress = Math.min(elapsed / effectiveReloadTime, 1);
+  overlay(() => {
+    // 绘制换弹进度条和图标
+    if (world.player.isReloading) {
+      const weaponConfig = WEAPONS[world.player.weapon];
+      // 狂暴状态：换弹速度+30%
+      const desperateActive = isDesperateFightActive(world.player);
+      const effectiveReloadBonus = world.player.reloadSpeedBonus + (desperateActive ? 30 : 0);
+      const effectiveReloadTime = deriveCombatStats(world.player, runtime.now()).reloadTime;
+      const elapsed = now - world.player.reloadStartTime;
+      const progress = Math.min(elapsed / effectiveReloadTime, 1);
 
-    // 绘制环形进度条（缩小50%后再缩小20%，位于角色下方再往下40px）
-    const progressRadius = (GAME_CONFIG.PLAYER_SIZE + 10) * 0.4;
-    const progressY = world.player.y + GAME_CONFIG.PLAYER_SIZE + 45; // 位于角色下方40px处
-    const startAngle = -Math.PI / 2;
-    const endAngle = startAngle + Math.PI * 2 * progress;
+      // 绘制环形进度条（缩小50%后再缩小20%，位于角色下方再往下40px）
+      const progressRadius = (GAME_CONFIG.PLAYER_SIZE + 10) * 0.4;
+      const progressY = world.player.y + GAME_CONFIG.PLAYER_SIZE + 45; // 位于角色下方40px处
+      const startAngle = -Math.PI / 2;
+      const endAngle = startAngle + Math.PI * 2 * progress;
 
-    // 背景圆环（圈粗细增加150%：4 → 6）
-    ctx.strokeStyle = 'rgba(100, 100, 100, 0.5)';
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.arc(world.player.x, progressY, progressRadius, 0, Math.PI * 2);
-    ctx.stroke();
+      // 背景圆环（圈粗细增加150%：4 → 6）
+      ctx.strokeStyle = 'rgba(100, 100, 100, 0.5)';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(world.player.x, progressY, progressRadius, 0, Math.PI * 2);
+      ctx.stroke();
 
-    // 进度圆环（圈粗细增加150%：4 → 6）
-    ctx.strokeStyle = '#ff8800';
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.arc(world.player.x, progressY, progressRadius, startAngle, endAngle);
-    ctx.stroke();
+      // 进度圆环（圈粗细增加150%：4 → 6）
+      ctx.strokeStyle = '#ff8800';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(world.player.x, progressY, progressRadius, startAngle, endAngle);
+      ctx.stroke();
 
-    // 旋转的加载图标（位于角色下方）
-    ctx.save();
-    ctx.translate(world.player.x, progressY);
-    ctx.rotate(elapsed * 0.005); // 旋转动画
+      // 旋转的加载图标（位于角色下方）
+      ctx.save();
+      ctx.translate(world.player.x, progressY);
+      ctx.rotate(elapsed * 0.005); // 旋转动画
 
-    ctx.fillStyle = '#ff8800';
-    ctx.font = '20px "Ark Pixel", Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('↻', 0, 0);
+      ctx.fillStyle = '#ff8800';
+      ctx.font = '20px "Ark Pixel", Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('↻', 0, 0);
 
-    ctx.restore();
-  }
+      ctx.restore();
+    }
+  });
 
   // 绘制吸血回复效果（红色上升光效）
   world.vampireHealEffects.forEach((effect) => {
@@ -2394,6 +2126,12 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
 
   // 恢复摄像机变换
   ctx.restore();
+  if (lighting) {
+    lighting.applyBase(ctx);
+    ctx.save(); ctx.translate(-cameraX, -cameraY);
+    for (const draw of overlays) draw();
+    ctx.restore();
+  }
 
   // 波次衔接：中心显示"第X波"+敌人数量，随后3/2/1倒计时（屏幕固定，层级最顶，不被遮挡）
   if (world.waveTransition) {

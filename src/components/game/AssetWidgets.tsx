@@ -5,6 +5,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { SpecialRewardType, isSpecialReward, getSpecialRewardDescription } from '@/game';
 
 import { loadImageAsset } from '@/game/assets/loader';
+import { ASSET_PATHS } from '@/game/assets/manifest';
 
 // 金币图标组件
 interface CoinIconProps {
@@ -80,7 +81,7 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
       ref={cardRef}
       className="flex flex-col items-center gap-2 cursor-pointer select-none transition-all relative"
       style={{
-        backgroundImage: `url(/assets/ui/upgrade-panel.svg)`,
+        backgroundImage: `url(${ASSET_PATHS.upgradePanel})`,
         backgroundSize: '100% 100%',
         backgroundRepeat: 'no-repeat',
         backgroundPosition: 'center',

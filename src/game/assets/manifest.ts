@@ -46,5 +46,11 @@ export const ASSET_PATHS = {
   playerDash: '/assets/player_3.png',
   skillIcon: '/assets/shanxian.png',
   bg: '/assets/bg.png',
+  tile1: '/assets/tile1.png',
+  tile2: '/assets/tile2.png',
+  tile3: '/assets/tile3.png',
+  tile4: '/assets/tile4.png',
+  tile5: '/assets/tile5.png',
+  upgradePanel: '/assets/win_1.png',
 } as const;
 export type AssetId = keyof typeof ASSET_PATHS;

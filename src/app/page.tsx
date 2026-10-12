@@ -37,6 +37,8 @@ import { explodeWorld } from '@/game/systems/explosion';
 import { spawnMonsterWaves } from '@/game/systems/spawnMonsters';
 import { updateWorld } from '@/game/systems/updateWorld';
 import { renderWorld } from '@/game/render/renderWorld';
+import { LightingRenderer } from '@/game/render/lighting/lightingRenderer';
+import { LIGHTING_DEFAULTS, type LightingConfig, type LightingQuality } from '@/game/config/lighting';
 import { Language, translate, loadLanguage, LOCALE_STORAGE_KEY } from '@/i18n';
 
 import {
@@ -52,6 +54,14 @@ export default function TopDownShooterGame() {
   const world = runtime.state;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const lightingRef = useRef<LightingRenderer | null>(null);
+  const [lightingConfig, setLightingConfig] = useState<LightingConfig>({ ...LIGHTING_DEFAULTS });
+  useEffect(() => {
+    const renderer = new LightingRenderer();
+    lightingRef.current = renderer;
+    return () => { renderer.dispose(); lightingRef.current = null; };
+  }, []);
+  useEffect(() => { lightingRef.current?.setConfig(lightingConfig); }, [lightingConfig]);
   const animationRef = useRef<number | undefined>(undefined);
   const levelCompleteTimeoutRef = useRef<number | undefined>(undefined);
 
@@ -324,6 +334,11 @@ export default function TopDownShooterGame() {
       // 背景图片
       { key: 'bg', src: ASSET_PATHS.bg, setter: setBgImage },
       // 地块图片
+      { key: 'tile1', src: ASSET_PATHS.tile1, type: 'tile', required: false },
+      { key: 'tile2', src: ASSET_PATHS.tile2, type: 'tile', required: false },
+      { key: 'tile3', src: ASSET_PATHS.tile3, type: 'tile', required: false },
+      { key: 'tile4', src: ASSET_PATHS.tile4, type: 'tile', required: false },
+      { key: 'tile5', src: ASSET_PATHS.tile5, type: 'tile', required: false },
     ];
 
     const controller = new AbortController();
@@ -345,17 +360,19 @@ export default function TopDownShooterGame() {
       );
       if (controller.signal.aborted) return;
       const byPath: Record<string, HTMLImageElement> = {};
+      const loadedTiles: HTMLImageElement[] = [];
       const failed: string[] = [];
       for (const { resource, result } of results) {
         if (result.status === 'loaded' && resource.type === 'obstacle')
           byPath[resource.src] = result.image;
+        if (result.status === 'loaded' && resource.type === 'tile') loadedTiles.push(result.image);
         if (result.status === 'failed' && resource.required !== false) failed.push(resource.key);
       }
       setObstacleImages(byPath);
       setResourceErrors(failed);
       setIsLoading(failed.length > 0);
-      // No tile files exist in this checkout: retain the existing solid-map fallback.
-      setTileImages([]);
+      // Promise.all 保留声明顺序；部分缺图时仍使用可用地块，全部失败则回退纯色。
+      setTileImages(loadedTiles);
     };
     void load();
     return () => controller.abort();
@@ -363,7 +380,10 @@ export default function TopDownShooterGame() {
 
   // 生成地图背景（地块平铺）
   const generateMapBackground = useCallback(() => {
-    if (tileImages.length === 0) return;
+    if (tileImages.length === 0) {
+      mapBackgroundCanvasRef.current = null;
+      return;
+    }
 
     // 检查所有地块的尺寸，确保它们一致
     console.log('Checking tile dimensions:');
@@ -399,7 +419,8 @@ export default function TopDownShooterGame() {
     for (let y = 0; y < tilesY; y++) {
       for (let x = 0; x < tilesX; x++) {
         // 随机选择一个地块图片
-        const tileIndex = Math.floor(runtime.random() * tileImages.length);
+        // 地面花纹仅影响表现，不消耗局内规则的随机源。
+        const tileIndex = Math.floor(Math.random() * tileImages.length);
         const tileImage = tileImages[tileIndex];
 
         if (tileImage) {
@@ -434,11 +455,9 @@ export default function TopDownShooterGame() {
     console.log(`Map background generated successfully`);
   }, [tileImages]);
 
-  // 当所有地块图片加载完成后，生成地图背景
+  // 加载完成后使用可用地块；全部失败时清除旧背景并回退纯色。
   useEffect(() => {
-    if (tileImages.length === 5) {
-      generateMapBackground();
-    }
+    generateMapBackground();
   }, [tileImages, generateMapBackground]);
 
   // 延迟更新图片版本，强制重新加载图片
@@ -532,7 +551,7 @@ export default function TopDownShooterGame() {
         // 随机选择障碍物类型
         const obstacleIndex = Math.floor(runtime.random() * obstacleImagePaths.length);
         const imagePath = obstacleImagePaths[obstacleIndex];
-        const obstacleImg = obstacleImages[obstacleIndex];
+        const obstacleImg = obstacleImages[imagePath];
         const config = obstacleConfigs[obstacleIndex];
 
         // 如果图片未加载，跳过
@@ -1064,6 +1083,8 @@ export default function TopDownShooterGame() {
     setBossMaxHp,
   };
   const rendererContext = {
+    // Read the ref inside the RAF callback, including the first frame after mounting.
+    get lighting() { return lightingRef.current; },
     t,
     world,
     runtime,
@@ -1479,7 +1500,7 @@ export default function TopDownShooterGame() {
           )}
 
           {/* 武器切换UI - 左下角（数字键快捷切换） */}
-          {view.gameState === 'playing' && (
+          {view.gameState === 'playing' && !view.isPaused && (
             <div className="absolute bottom-4 left-4 flex flex-col gap-1">
               <div
                 className="text-gray-400/90 text-[11px] font-semibold px-1 mb-0.5 tracking-wide select-none"
@@ -2386,6 +2407,28 @@ export default function TopDownShooterGame() {
                   </div>
                 </div>
 
+                {/* 光影设置 */}
+                <div className="mb-6 flex items-center justify-between gap-4">
+                  <label htmlFor="lighting-quality" className="text-gray-400 text-sm font-medium">{t('lighting')}</label>
+                  <select id="lighting-quality" className="bg-gray-800 text-gray-100 border border-gray-600 rounded px-3 py-2"
+                    value={lightingConfig.enabled ? lightingConfig.quality : 'off'}
+                    onChange={(event) => {
+                      const quality = event.target.value;
+                      setLightingConfig(previous => ({ ...previous, enabled: quality !== 'off',
+                        quality: quality === 'off' ? previous.quality : quality as LightingQuality }));
+                    }}>
+                    <option value="off">{t('lightingOff')}</option>
+                    <option value="basic">{t('lightingBasic')}</option>
+                    <option value="standard">{t('lightingStandard')}</option>
+                    <option value="high">{t('lightingHigh')}</option>
+                  </select>
+                </div>
+                <label className="mb-6 flex items-center gap-3 text-sm text-gray-300">
+                  <input type="checkbox" checked={lightingConfig.lightLevels === 4}
+                    onChange={(event) => setLightingConfig(previous => ({ ...previous,
+                      lightLevels: event.target.checked ? 4 : 0 }))} />
+                  {t('lightingSteps')}
+                </label>
                 {/* 语言切换 */}
                 <div className="flex justify-center items-center gap-3 mb-6">
                   <span className="text-gray-400 text-sm font-medium">{t('language')}</span>

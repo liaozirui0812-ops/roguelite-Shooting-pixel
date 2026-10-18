@@ -119,7 +119,11 @@ pnpm lint:build
 | 1152–1343 | 输入绑定：键盘、鼠标、滚轮、Canvas 按钮命中 | **B1.3 抽出** |
 | 1345–2527 | JSX，13 个界面区块 | **B1.2 抽出** |
 
-**B1.1 · 资源装配 → `src/hooks/useGameAssets.ts`**
+**B1.1 · 资源装配 → `src/hooks/useGameAssets.ts`** ✅ 已完成（2026-10-19）
+
+已落地，与下述原案有一处偏差：返回形状采用 `assets` 记录表（`assets.coin` / `assets.playerIdle` …），不再保留 30 个独立 `useState`；消费侧（rendererContext / getWeaponImage / 爆炸触发 / 暂停按钮命中）改为查表。顺带移除 7 张从未被消费的死资源加载（5 张武器展示图、bg、start——bg 实际由 CSS `url()` 承担）。`tests/map-assets-regression.cjs` 已改为从 hook 文件提取加载回调。验证：tsc 0 / lint 0 / 回归 49。
+
+原案说明备查：
 
 把 108–228 的图片 `useState` 与 258–379 的加载 Effect 整体搬入，返回 `{ assets, tileImages, obstacleImages, isLoading, loadProgress, resourceErrors }`。`ASSET_PATHS` 与 `loadImageAsset` 已在 `src/game/assets/` 下，不需要重新实现 loader。
 

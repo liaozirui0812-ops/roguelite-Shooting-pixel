@@ -1,20 +1,14 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useSound } from '@/hooks/useSound';
 import {
   checkCollisionWithObstacle,
   GAME_CONFIG,
   WeaponType,
-  WEAPONS,
-  RARITY_META,
-  getWeaponInstance,
-  getWeaponAffixSummary,
   applyWeaponStatsToPlayer,
   getWeaponMagazine,
-  STARTER_WEAPON_META,
   Position,
   Player,
   MuzzleFlash,
@@ -40,13 +34,19 @@ import { LightingRenderer } from '@/game/render/lighting/lightingRenderer';
 import { LIGHTING_DEFAULTS, type LightingConfig, type LightingQuality } from '@/game/config/lighting';
 import { Language, translate, loadLanguage, LOCALE_STORAGE_KEY } from '@/i18n';
 
-import {
-  bounceInAnimation,
-  CoinIcon,
-  UpgradeCard,
-  ShopItemCard,
-  PixelButton,
-} from '@/components/game/AssetWidgets';
+import { LoadingScreen } from '@/components/game/LoadingScreen';
+import { WeaponSwitchHint } from '@/components/game/WeaponSwitchHint';
+import { HealthBarHud } from '@/components/game/HealthBarHud';
+import { WeaponSlotBar } from '@/components/game/WeaponSlotBar';
+import { MuteButton } from '@/components/game/MuteButton';
+import { MenuScreen } from '@/components/game/MenuScreen';
+import { BuffPreviewDialog } from '@/components/game/BuffPreviewDialog';
+import { WeaponSelectScreen } from '@/components/game/WeaponSelectScreen';
+import { UpgradeScreen } from '@/components/game/UpgradeScreen';
+import { ShopScreen } from '@/components/game/ShopScreen';
+import { GameOverScreen } from '@/components/game/GameOverScreen';
+import { BossHealthBar } from '@/components/game/BossHealthBar';
+import { SettingsDialog } from '@/components/game/SettingsDialog';
 
 export default function TopDownShooterGame() {
   const { runtime, view } = useGameRuntime(createWorld, createGameView);
@@ -1185,62 +1185,12 @@ export default function TopDownShooterGame() {
         >
           {/* 加载界面 */}
           {isLoading && (
-            <div className="absolute inset-0 z-50 flex flex-col items-center justify-center rounded-lg bg-gradient-to-b from-gray-900 to-black">
-              {/* 游戏标题 */}
-              <h1
-                className="text-4xl font-bold text-yellow-400 mb-8"
-                style={{
-                  textShadow: '0 0 10px rgba(250, 204, 21, 0.5), 3px 3px 0 #000',
-                  fontFamily: '"Ark Pixel", Arial',
-                }}
-              >
-                {t('game_title')}
-              </h1>
-
-              {/* 加载状态文本 */}
-              <p
-                className="text-gray-300 text-lg mb-6"
-                style={{ fontFamily: '"Ark Pixel", Arial' }}
-              >
-                {t('loading')}
-              </p>
-
-              {/* 进度条容器 */}
-              <div className="w-80 h-8 bg-gray-800 rounded-full overflow-hidden border-2 border-gray-600 mb-4">
-                {/* 进度条填充 */}
-                <div
-                  className="h-full bg-gradient-to-r from-yellow-500 via-orange-500 to-yellow-500 transition-all duration-200 ease-out"
-                  style={{
-                    width: `${loadProgress}%`,
-                    boxShadow: '0 0 10px rgba(250, 204, 21, 0.5)',
-                  }}
-                />
-              </div>
-
-              {/* 进度百分比 */}
-              <p
-                className="text-yellow-400 text-2xl font-bold"
-                style={{ fontFamily: '"Ark Pixel", Arial' }}
-              >
-                {loadProgress}%
-              </p>
-
-              {resourceErrors.length > 0 && (
-                <div role="alert" className="mt-4 text-center text-red-300">
-                  <p>{t('assetLoadFailed')}</p>
-                  <Button className="mt-2" onClick={retryLoad}>
-                    {t('retryLoad')}
-                  </Button>
-                </div>
-              )}
-              {/* 小提示 */}
-              <p
-                className="text-gray-500 text-sm mt-8"
-                style={{ fontFamily: '"Ark Pixel", Arial' }}
-              >
-                {resourceErrors.length === 0 ? t('loading_click_to_start') : t('assetLoadFailed')}
-              </p>
-            </div>
+            <LoadingScreen
+              t={t}
+              loadProgress={loadProgress}
+              resourceErrors={resourceErrors}
+              retryLoad={retryLoad}
+            />
           )}
 
           <canvas
@@ -1262,1090 +1212,103 @@ export default function TopDownShooterGame() {
 
           {/* 武器切换提示 */}
           {view.player.isSwitchingWeapon && (
-            <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-end">
-              {/* 切换进度条 */}
-              <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 w-48">
-                <div className="h-2 bg-gray-800/80 rounded-full overflow-hidden border border-cyan-500/50">
-                  <div
-                    className="h-full bg-gradient-to-r from-cyan-500 to-blue-500"
-                    style={{
-                      width: '100%',
-                      animation: 'weaponSwitchProgress 1s ease-out forwards',
-                    }}
-                  />
-                </div>
-                <div
-                  className="text-center text-white font-bold mt-2"
-                  style={{
-                    textShadow: '2px 2px 0 #000',
-                    fontFamily: '"Ark Pixel", Arial',
-                    animation: 'weaponSwitchPulse 0.4s ease-in-out infinite',
-                  }}
-                >
-                  切换武器中...
-                </div>
-              </div>
-
-              {/* 动画样式 */}
-              <style jsx>{`
-                @keyframes weaponSwitchProgress {
-                  from {
-                    width: 0%;
-                    background: linear-gradient(to right, transparent, #06b6d4);
-                  }
-                  to {
-                    width: 100%;
-                    background: linear-gradient(to right, #06b6d4, #3b82f6);
-                  }
-                }
-                @keyframes weaponSwitchPulse {
-                  0%,
-                  100% {
-                    opacity: 1;
-                    transform: scale(1);
-                  }
-                  50% {
-                    opacity: 0.7;
-                    transform: scale(1.05);
-                  }
-                }
-              `}</style>
-            </div>
+            <WeaponSwitchHint />
           )}
 
           {/* 生命值条 - 显示在 Canvas 区域下方中间 */}
           {view.gameState === 'playing' && !view.isPaused && (
-            <div className="absolute bottom-[70px] left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-2">
-              {/* 弹药数显示 */}
-              <div
-                className="text-white font-bold text-lg"
-                style={{
-                  textShadow: '2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000',
-                  fontFamily: '"Ark Pixel", Arial',
-                }}
-              >
-                🔫 {t('ammo')}: {view.player.currentAmmo}/
-                {getWeaponMagazine(view.player, view.player.weapon)}
-                {view.player.isReloading && (
-                  <span className="ml-2 text-yellow-300">{t('reloading')}</span>
-                )}
-              </div>
-            </div>
+            <HealthBarHud view={view} t={t} />
           )}
 
           {/* 武器切换UI - 左下角（数字键快捷切换） */}
           {view.gameState === 'playing' && !view.isPaused && (
-            <div className="absolute bottom-4 left-4 flex flex-col gap-1">
-              <div
-                className="text-gray-400/90 text-[11px] font-semibold px-1 mb-0.5 tracking-wide select-none"
-                style={{ textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
-              >
-                {t('switch_weapon_hint').replace(
-                  '{keys}',
-                  view.player.weapons.map((_, i) => i + 1).join(' / ')
-                )}
-              </div>
-              <div className="flex flex-col gap-1.5" style={{ backdropFilter: 'blur(6px)' }}>
-                {view.player.weapons.map((wpn, idx) => {
-                  const isActive = idx === view.player.currentWeaponIndex;
-                  const inst = getWeaponInstance(view.player, wpn);
-                  const rmeta = RARITY_META[inst.rarity] || RARITY_META[1];
-                  const s = getWeaponAffixSummary(view.player, wpn);
-                  const affixText = inst.affixes.map((a) => a.valueLabel).join(' · ');
-                  return (
-                    <div
-                      key={wpn}
-                      onClick={() => switchWeaponTo(idx)}
-                      className={`flex items-center gap-2.5 rounded-lg px-3 py-2 min-w-[240px] cursor-pointer select-none transition-all duration-150
-                        ${
-                          isActive
-                            ? 'bg-gray-800/95 border-2 border-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.45)]'
-                            : 'bg-gray-900/75 border-2 border-gray-600 hover:border-gray-400 active:bg-gray-800/90'
-                        }`}
-                      style={isActive ? { borderColor: '#22d3ee' } : undefined}
-                    >
-                      {/* 编号 */}
-                      <span
-                        className={`w-5 h-5 rounded flex items-center justify-center text-xs font-black shrink-0
-                        ${isActive ? 'bg-cyan-400 text-gray-900' : 'bg-gray-700 text-gray-200'}`}
-                      >
-                        {idx + 1}
-                      </span>
-                      {/* 武器图标 */}
-                      <img
-                        src={WEAPONS[wpn].showIcon}
-                        alt={WEAPONS[wpn].name}
-                        className={`w-7 h-7 object-contain shrink-0 transition-all duration-150 ${isActive ? 'brightness-110 scale-105' : 'opacity-80'}`}
-                      />
-                      {/* 名称 + 稀有度 + 属性 */}
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <span
-                          className="text-sm font-bold truncate leading-tight"
-                          style={{ color: rmeta.color, textShadow: `0 0 6px ${rmeta.color}55` }}
-                        >
-                          {WEAPONS[wpn].name}
-                          <span className="ml-1.5 text-[10px] font-bold opacity-90">
-                            {rmeta.name}
-                          </span>
-                        </span>
-                        <span className="text-[10px] text-gray-300/90 truncate leading-tight">
-                          {inst.affixes.length > 0 ? (
-                            affixText
-                          ) : (
-                            <span className="text-gray-500">· 无随机属性 ·</span>
-                          )}
-                          <span className="ml-1 text-gray-400">价值{inst.value}</span>
-                        </span>
-                      </div>
-                      {/* 当前标记 */}
-                      {isActive && (
-                        <span className="ml-auto text-[10px] font-bold text-cyan-300 tracking-wide">
-                          ●
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <WeaponSlotBar view={view} t={t} switchWeaponTo={switchWeaponTo} />
           )}
 
           {/* 静音按钮 - 右上角 */}
           {view.gameState === 'playing' && !view.isPaused && (
-            <button
-              onClick={toggleMute}
-              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-gray-800/80 border-2 border-gray-500 hover:border-white flex items-center justify-center cursor-pointer transition-all duration-200"
-              style={{
-                backdropFilter: 'blur(5px)',
-              }}
-              title={isMuted ? t('enable_sound') : t('mute')}
-            >
-              {isMuted ? (
-                <svg
-                  className="w-5 h-5 text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"
-                  />
-                </svg>
-              ) : (
-                <svg
-                  className="w-5 h-5 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                  />
-                </svg>
-              )}
-            </button>
+            <MuteButton t={t} isMuted={isMuted} toggleMute={toggleMute} />
           )}
 
           {/* 菜单界面 */}
           {view.gameState === 'menu' && (
-            <div
-              className="absolute inset-0 flex items-center justify-center rounded-lg"
-              style={{
-                backgroundImage: 'url(/assets/bg.png)',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                backgroundRepeat: 'no-repeat',
-              }}
-            >
-              {/* 右上角设置按钮 */}
-              <button
-                onClick={() => setShowSettings(true)}
-                className="absolute top-4 right-4 z-20 w-10 h-10 rounded-full bg-gray-800/80 border-2 border-gray-400 hover:border-white flex items-center justify-center cursor-pointer transition-all duration-200"
-                style={{ backdropFilter: 'blur(5px)' }}
-                title={t('settings')}
-              >
-                <svg
-                  className="w-5 h-5 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-              </button>
-              {/* 半透明黑色遮罩 */}
-              <div className="absolute inset-0 bg-black/50 rounded-lg"></div>
-
-              {/* 左上角信息按钮 */}
-              <div
-                className="absolute top-4 left-4 z-20"
-                onMouseEnter={() => setShowInfoPopup(true)}
-                onMouseLeave={() => setShowInfoPopup(false)}
-              >
-                {/* 圆形"i"按钮 */}
-                <div
-                  className="w-10 h-10 rounded-full bg-gray-800/80 border-2 border-gray-400 flex items-center justify-center cursor-pointer hover:bg-gray-700/90 hover:border-white transition-all duration-200"
-                  style={{
-                    boxShadow: showInfoPopup ? '0 0 15px rgba(255,255,255,0.3)' : 'none',
-                  }}
-                >
-                  <span className="text-white font-bold text-xl italic">i</span>
-                </div>
-
-                {/* 信息弹窗 */}
-                {showInfoPopup && (
-                  <div
-                    className="absolute top-12 left-0 w-80 bg-gray-900/95 border-2 border-gray-500 rounded-lg p-4 shadow-2xl"
-                    style={{
-                      backdropFilter: 'blur(10px)',
-                    }}
-                  >
-                    <h3 className="text-lg font-bold text-white mb-3 border-b border-gray-600 pb-2">
-                      🎮 游戏功能一览
-                    </h3>
-                    <ul className="text-sm text-gray-200 space-y-1.5">
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_levelWeight')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_wave')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_animation')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_boss')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_shop')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_upgrade_reward')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_weapons')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_weaponUpgrade')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_crit')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_reload')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_pierce')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_gold')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_chest')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_obstacle')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_slowFocus')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_shooterEnemy')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_dmgNumbers')}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-green-400">•</span>
-                        <span>{t('feature_rocketExplosion')}</span>
-                      </li>
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-col items-center justify-center relative z-10">
-                <h1 className="text-5xl font-bold text-white mb-6 drop-shadow-lg">
-                  {t('game.title')}
-                </h1>
-                <p className="text-gray-300 mb-4 drop-shadow-md text-center">
-                  {t('menu.controls')}
-                </p>
-                {highScore > 0 && (
-                  <p className="text-yellow-400 mb-8 drop-shadow-md text-center font-bold text-lg">
-                    🏆 {t('menu.highScore')}: {highScore}
-                  </p>
-                )}
-                <PixelButton
-                  imageUrl="/assets/btn_main.png"
-                  onClick={() => setGameState('weaponSelect')}
-                  width={220}
-                  height={82.5}
-                >
-                  <span className="text-white font-bold text-xl">{t('menu.start')}</span>
-                </PixelButton>
-                <PixelButton
-                  imageUrl="/assets/btn_2.png"
-                  onClick={() => setShowBuffPreview(true)}
-                  width={220}
-                  height={82.5}
-                >
-                  <span className="text-white font-bold text-lg">{t('menu.buffPreview')}</span>
-                </PixelButton>
-              </div>
-            </div>
+            <MenuScreen
+              t={t}
+              highScore={highScore}
+              showInfoPopup={showInfoPopup}
+              setShowInfoPopup={setShowInfoPopup}
+              setShowSettings={setShowSettings}
+              setShowBuffPreview={setShowBuffPreview}
+              setGameState={setGameState}
+            />
           )}
 
           {/* Buff 预览弹窗 */}
           {showBuffPreview && (
-            <>
-              <style>{bounceInAnimation}</style>
-              <div
-                className="absolute inset-0 z-50 flex items-center justify-center rounded-lg"
-                style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)' }}
-                onClick={(e) => {
-                  if (e.target === e.currentTarget) setShowBuffPreview(false);
-                }}
-              >
-                <div
-                  className="relative bg-gradient-to-b from-gray-800 to-gray-900 rounded-xl border-2 border-gray-500 shadow-2xl p-8"
-                  style={{ maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto' }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {/* 关闭按钮 - 右上角 X */}
-                  <button
-                    onClick={() => setShowBuffPreview(false)}
-                    className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-gray-700 hover:bg-red-600 border border-gray-500 hover:border-red-400 flex items-center justify-center cursor-pointer transition-all duration-200"
-                    title={t('close')}
-                  >
-                    <svg
-                      className="w-4 h-4 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2.5}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-
-                  {/* 标题 */}
-                  <h2 className="text-2xl font-bold text-white mb-6 text-center">
-                    {t('specialBuffPreviewTitle')}
-                  </h2>
-
-                  {/* 通用 Buff 区域 */}
-                  <h3 className="text-lg font-bold text-yellow-300 mb-4 border-b border-gray-600 pb-2">
-                    {t('generalBuffLabel')}
-                  </h3>
-                  <div className="flex flex-wrap gap-4 justify-center mb-6">
-                    {[
-                      {
-                        icon: '/assets/fire_buff.png',
-                        name: t('buffIgniteName'),
-                        desc: t('buffIgniteDesc'),
-                      },
-                      {
-                        icon: '/assets/poison_buff.png',
-                        name: t('buffPoisonName'),
-                        desc: t('buffPoisonDesc'),
-                      },
-                      {
-                        icon: '/assets/aura.png',
-                        name: t('buffAuraName'),
-                        desc: t('buffAuraDesc'),
-                      },
-                      {
-                        icon: '/assets/execution.png',
-                        name: t('buffExecutionName'),
-                        desc: t('buffExecutionDesc'),
-                      },
-                      {
-                        icon: '/assets/critical_rage.png',
-                        name: t('buffRageName'),
-                        desc: t('buffRageDesc'),
-                      },
-                      {
-                        icon: '/assets/ui/vampire.svg',
-                        name: t('buffVampireName'),
-                        desc: t('buffVampireDesc'),
-                      },
-                      {
-                        icon: '/assets/ammo_supply.png',
-                        name: t('buffAmmoSupplyName'),
-                        desc: t('buffAmmoSupplyDesc'),
-                      },
-                      {
-                        icon: '/assets/desperate_fight.png',
-                        name: t('buffDesperateFightName'),
-                        desc: t('buffDesperateFightDesc'),
-                      },
-                    ].map((buff, index) => (
-                      <div
-                        key={buff.name}
-                        className="flex flex-col items-center"
-                        style={{
-                          backgroundImage: 'url(/assets/ui/upgrade-panel.svg)',
-                          backgroundSize: '100% 100%',
-                          backgroundRepeat: 'no-repeat',
-                          backgroundPosition: 'center',
-                          width: '200px',
-                          height: '260px',
-                          padding: '25px 20px 80px',
-                          animation: `bounceIn 0.5s ease-out ${index * 50}ms both`,
-                        }}
-                      >
-                        <img
-                          src={buff.icon}
-                          alt={buff.name}
-                          style={{
-                            width: '72px',
-                            height: '72px',
-                            imageRendering: 'pixelated',
-                            objectFit: 'contain',
-                          }}
-                        />
-                        <div
-                          className="text-center w-full"
-                          style={{ width: '85%', wordBreak: 'break-word', whiteSpace: 'normal' }}
-                        >
-                          <div className="font-bold text-white text-base">{buff.name}</div>
-                          <div className="text-xs text-gray-300 mt-1 leading-tight">
-                            {buff.desc}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* 武器专属 Buff 区域 */}
-                  <h3 className="text-lg font-bold text-orange-300 mb-4 border-b border-gray-600 pb-2">
-                    {t('weaponBuffLabel')}
-                  </h3>
-
-                  {/* 手枪 */}
-                  <h4 className="text-sm font-bold text-gray-400 mb-3 ml-2">
-                    🔫 {t('pistolName')}
-                  </h4>
-                  <div className="flex flex-wrap gap-4 justify-center mb-4">
-                    <div
-                      className="flex flex-col items-center"
-                      style={{
-                        backgroundImage: 'url(/assets/ui/upgrade-panel.svg)',
-                        backgroundSize: '100% 100%',
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'center',
-                        width: '200px',
-                        height: '260px',
-                        padding: '25px 20px 80px',
-                        animation: `bounceIn 0.5s ease-out ${8 * 50}ms both`,
-                      }}
-                    >
-                      <img
-                        src="/assets/pistol_show.png"
-                        alt="最后一弹"
-                        style={{
-                          width: '72px',
-                          height: '72px',
-                          imageRendering: 'pixelated',
-                          objectFit: 'contain',
-                        }}
-                      />
-                      <div
-                        className="text-center w-full"
-                        style={{ width: '85%', wordBreak: 'break-word', whiteSpace: 'normal' }}
-                      >
-                        <div className="font-bold text-white text-base">
-                          {t('buffLastBulletName')}
-                        </div>
-                        <div className="text-xs text-gray-300 mt-1 leading-tight">
-                          {t('buffLastBulletDesc')}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 火箭筒 */}
-                  <h4 className="text-sm font-bold text-gray-400 mb-3 ml-2">
-                    🚀 {t('rocketName')}
-                  </h4>
-                  <div className="flex flex-wrap gap-4 justify-center mb-4">
-                    {[
-                      {
-                        icon: '/assets/RPG_show.png',
-                        name: '冲击波',
-                        desc: '爆炸伤害后，未死亡敌人从爆炸中心向反方向击退30px，并在1.5秒内减速70%。',
-                      },
-                      {
-                        icon: '/assets/RPG_show.png',
-                        name: '穿甲弹',
-                        desc: '爆炸伤害+200%，但爆炸范围-80%。',
-                      },
-                      {
-                        icon: '/assets/RPG_show.png',
-                        name: '两联装',
-                        desc: '弹夹变为2发，0.7秒内连续发射两发。每发伤害60%、范围70%、美术资源60%。',
-                      },
-                    ].map((buff, index) => (
-                      <div
-                        key={buff.name}
-                        className="flex flex-col items-center"
-                        style={{
-                          backgroundImage: 'url(/assets/ui/upgrade-panel.svg)',
-                          backgroundSize: '100% 100%',
-                          backgroundRepeat: 'no-repeat',
-                          backgroundPosition: 'center',
-                          width: '200px',
-                          height: '260px',
-                          padding: '25px 20px 80px',
-                          animation: `bounceIn 0.5s ease-out ${(9 + index) * 50}ms both`,
-                        }}
-                      >
-                        <img
-                          src={buff.icon}
-                          alt={buff.name}
-                          style={{
-                            width: '72px',
-                            height: '72px',
-                            imageRendering: 'pixelated',
-                            objectFit: 'contain',
-                          }}
-                        />
-                        <div
-                          className="text-center w-full"
-                          style={{ width: '85%', wordBreak: 'break-word', whiteSpace: 'normal' }}
-                        >
-                          <div className="font-bold text-white text-base">{buff.name}</div>
-                          <div className="text-xs text-gray-300 mt-1 leading-tight">
-                            {buff.desc}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </>
+            <BuffPreviewDialog view={view} t={t} setShowBuffPreview={setShowBuffPreview} />
           )}
 
           {/* 武器选择界面 */}
           {view.gameState === 'weaponSelect' && (
-            <div
-              className="absolute inset-0 flex items-center justify-center rounded-lg"
-              style={{
-                backgroundImage: 'url(/assets/bg.png)',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                backgroundRepeat: 'no-repeat',
-              }}
-            >
-              <div className="absolute inset-0 bg-black/60"></div>
-              <div className="relative z-10 text-center">
-                <h2 className="text-4xl font-bold text-white mb-2 drop-shadow-lg">
-                  {t('weaponSelectTitle')}
-                </h2>
-                <p className="text-gray-300 mb-8 drop-shadow-md">{t('weaponSelectHint')}</p>
-
-                <div className="flex gap-4 justify-center flex-wrap max-w-4xl">
-                  {(Object.keys(WEAPONS) as WeaponType[])
-                    .filter((w) => WEAPONS[w].isStarter)
-                    .map((w) => {
-                      const meta = STARTER_WEAPON_META[w];
-                      const cfg = WEAPONS[w];
-                      return (
-                        <div
-                          key={w}
-                          className={`bg-gradient-to-b from-gray-800/90 to-gray-900/90 rounded-lg p-4 cursor-pointer hover:from-gray-700/90 hover:to-gray-800/90 transition-all duration-200 border-2 ${meta.border} w-44`}
-                          onClick={() => startGameWithWeapon(w)}
-                        >
-                          <div className="flex flex-col items-center">
-                            <img
-                              src={cfg.showIcon}
-                              alt={cfg.name}
-                              className="w-24 h-24 object-contain mb-2"
-                            />
-                            <h3 className={`text-lg font-bold ${meta.title} mb-1`}>{cfg.name}</h3>
-                            <p className="text-xs text-gray-300 mb-2">{cfg.description}</p>
-                            <div className="text-xs text-left w-full space-y-1">
-                              {meta.stats.map((s, i) => (
-                                <p
-                                  key={i}
-                                  className={
-                                    s.includes('%/') ||
-                                    s.includes('移动') ||
-                                    s.includes('穿透') ||
-                                    s.includes('暴击')
-                                      ? 'text-green-400'
-                                      : 'text-gray-400'
-                                  }
-                                >
-                                  {s}
-                                </p>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-
-                <button
-                  className="mt-8 px-6 py-2 bg-gray-700/80 hover:bg-gray-600/80 text-gray-300 rounded-lg transition-colors"
-                  onClick={() => setGameState('menu')}
-                >
-                  返回菜单
-                </button>
-              </div>
-            </div>
+            <WeaponSelectScreen
+              t={t}
+              startGameWithWeapon={startGameWithWeapon}
+              setGameState={setGameState}
+            />
           )}
 
           {/* 升级界面 */}
           {view.gameState === 'upgrade' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/80 rounded-lg">
-              {/* 注入弹跳动画样式 */}
-              <style>{bounceInAnimation}</style>
-              <div className="text-center">
-                <h2 className="text-4xl font-bold text-white mb-2">{t('levelComplete')}</h2>
-                <p className="text-gray-300 mb-6">{t('chooseUpgrade')}</p>
-                <div className="flex gap-4 justify-center">
-                  {view.availableUpgrades.map((upgrade, index) => {
-                    // 弹跳顺序：中、左、右
-                    // 索引映射：0->左, 1->中, 2->右
-                    // 延迟：中(0ms), 左(75ms), 右(150ms)
-                    const delays = [75, 0, 150]; // 对应索引的延迟
-                    const animationDelay = delays[index] || 0;
-
-                    return (
-                      <UpgradeCard
-                        key={upgrade.id}
-                        icon={upgrade.icon}
-                        name={upgrade.name}
-                        description={upgrade.description}
-                        upgradeType={upgrade.id}
-                        animationDelay={animationDelay}
-                        onClick={() => applyUpgrade(upgrade.id)}
-                      />
-                    );
-                  })}
-                </div>
-                <div className="flex gap-4 justify-center mt-8">
-                  <PixelButton
-                    imageUrl="/assets/btn_2.png"
-                    onClick={refreshUpgrades}
-                    disabled={view.upgradeRefreshCount >= 1}
-                    width={220}
-                    height={82.5}
-                  >
-                    <span className="text-gray-700 font-bold text-xl flex items-center justify-center gap-2">
-                      {t('refresh')}: {1 - view.upgradeRefreshCount}
-                    </span>
-                  </PixelButton>
-                </div>
-              </div>
-            </div>
+            <UpgradeScreen
+              view={view}
+              t={t}
+              applyUpgrade={applyUpgrade}
+              refreshUpgrades={refreshUpgrades}
+            />
           )}
 
           {/* 商店界面 */}
           {view.gameState === 'shop' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/64 rounded-lg">
-              {/* 注入弹跳动画样式 */}
-              <style>{bounceInAnimation}</style>
-              <div className="text-center p-8 max-w-4xl">
-                <h2 className="text-4xl font-bold text-white mb-2">{t('shopTitle')}</h2>
-                <p className="text-gray-300 mb-4 flex items-center justify-center gap-2">
-                  <CoinIcon size={24} />
-                  {t('gold')}: <span className="text-yellow-400 font-bold">{view.player.gold}</span>
-                </p>
-
-                <div className="flex gap-4 justify-center mb-8">
-                  {view.shopItems.map((item, index) => {
-                    // 检查该商品类型是否被锁定
-                    const isItemLocked = view.lockedItems.some(
-                      (locked) => locked.type === item.type
-                    );
-                    // 弹跳顺序：中、左、右
-                    // 延迟：中(0ms), 左(75ms), 右(150ms)
-                    const delays = [75, 0, 150]; // 对应索引的延迟
-                    const animDelay = delays[index] || 0;
-                    return (
-                      <ShopItemCard
-                        key={item.id}
-                        icon={item.icon}
-                        name={item.name}
-                        description={item.description}
-                        price={item.price}
-                        canAfford={view.player.gold >= item.price}
-                        isLocked={isItemLocked}
-                        itemType={item.type}
-                        animationDelay={animDelay}
-                        onClick={() => buyShopItem(item)}
-                      />
-                    );
-                  })}
-                </div>
-
-                <div className="flex gap-4 justify-center flex-wrap">
-                  <PixelButton
-                    imageUrl="/assets/btn_2.png"
-                    onClick={toggleLockItems}
-                    width={150}
-                    height={82.5}
-                  >
-                    <span className="text-gray-700 font-bold text-xl flex items-center justify-center gap-2">
-                      {view.lockedItems.length > 0 ? (
-                        <>
-                          <img src="/assets/ui/lock.svg" alt="解锁" className="w-6 h-6" />
-                          解锁
-                        </>
-                      ) : (
-                        <>
-                          <img src="/assets/ui/lock.svg" alt="锁定" className="w-6 h-6" />
-                          锁定
-                        </>
-                      )}
-                    </span>
-                  </PixelButton>
-                  <PixelButton
-                    imageUrl="/assets/btn_2.png"
-                    onClick={refreshShop}
-                    width={220}
-                    height={82.5}
-                    disabled={view.player.gold < view.shopRefreshPrice} // 仅金币不足时禁用
-                  >
-                    <span className="text-gray-700 font-bold text-xl flex items-center justify-center gap-2">
-                      🔄 刷新
-                      {view.player.gold >= view.shopRefreshPrice ? (
-                        <>
-                          <CoinIcon size={20} /> {view.shopRefreshPrice}
-                        </>
-                      ) : (
-                        <span className="opacity-50">
-                          <CoinIcon size={20} /> {view.shopRefreshPrice}
-                        </span>
-                      )}
-                    </span>
-                  </PixelButton>
-                  <PixelButton
-                    imageUrl="/assets/btn_2.png"
-                    onClick={exitShop}
-                    width={220}
-                    height={82.5}
-                  >
-                    <span className="text-gray-700 font-bold text-xl">{t('exitShop')}</span>
-                  </PixelButton>
-                </div>
-              </div>
-            </div>
+            <ShopScreen
+              view={view}
+              t={t}
+              buyShopItem={buyShopItem}
+              toggleLockItems={toggleLockItems}
+              refreshShop={refreshShop}
+              exitShop={exitShop}
+            />
           )}
 
           {/* 游戏结束界面 */}
           {view.gameState === 'gameover' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/80 rounded-lg">
-              <div className="text-center">
-                <h2 className="text-5xl font-bold text-red-500 mb-4">{t('gameOver')}</h2>
-                <p className="text-gray-300 mb-2">
-                  {t('finalLevel')}: {view.level}
-                </p>
-                <p className="text-gray-300 mb-8">
-                  {t('finalScore')}: {view.score}
-                </p>
-                <div className="flex gap-4 justify-center">
-                  <PixelButton
-                    imageUrl="/assets/btn_main.png"
-                    onClick={restartGame}
-                    width={220}
-                    height={82.5}
-                  >
-                    <span className="text-white font-bold text-xl">{t('restart')}</span>
-                  </PixelButton>
-                  <PixelButton
-                    imageUrl="/assets/btn_2.png"
-                    onClick={() => setGameState('menu')}
-                    width={220}
-                    height={82.5}
-                  >
-                    <span className="text-gray-700 font-bold text-xl">{t('backToMenu')}</span>
-                  </PixelButton>
-                </div>
-              </div>
-            </div>
+            <GameOverScreen
+              view={view}
+              t={t}
+              restartGame={restartGame}
+              setGameState={setGameState}
+            />
           )}
 
           {/* BOSS血条 */}
           {view.gameState === 'playing' && view.bossAlive && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/70 rounded-lg p-4 min-w-[300px] border-2 border-red-600">
-              <div className="text-center">
-                <div className="text-red-500 font-bold text-lg mb-2 flex items-center justify-center gap-2">
-                  👹 史莱姆王
-                  <span className="text-sm text-gray-300">Lv.{view.level}</span>
-                </div>
-                <div className="w-full bg-gray-700 rounded-full h-6 overflow-hidden relative">
-                  <div
-                    className="h-full bg-gradient-to-r from-red-700 via-red-500 to-red-400 transition-all duration-300 ease-out"
-                    style={{ width: `${(view.bossCurrentHp / view.bossMaxHp) * 100}%` }}
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center text-white text-sm font-bold">
-                    {Math.round(view.bossCurrentHp)} / {view.bossMaxHp}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <BossHealthBar view={view} t={t} />
           )}
 
           {/* 设置弹窗 */}
           {showSettings && (
-            <div
-              className="absolute inset-0 z-50 flex items-center justify-center rounded-lg"
-              style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)' }}
-              onClick={(e) => {
-                if (e.target === e.currentTarget) setShowSettings(false);
-              }}
-            >
-              <div
-                className="relative bg-gradient-to-b from-gray-800 to-gray-900 rounded-xl border-2 border-gray-500 shadow-2xl p-8 w-96"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* 关闭按钮 - 右上角 X */}
-                <button
-                  onClick={() => setShowSettings(false)}
-                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-700 hover:bg-red-600 border border-gray-500 hover:border-red-400 flex items-center justify-center cursor-pointer transition-all duration-200"
-                  title={t('close')}
-                >
-                  <svg
-                    className="w-4 h-4 text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2.5}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-
-                {/* 标题 */}
-                <h2 className="text-2xl font-bold text-white mb-6 text-center">{t('settings')}</h2>
-
-                {/* 音量调节 */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="text-gray-300 text-base font-medium flex items-center gap-2">
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                        />
-                      </svg>
-                      {t('soundVolume')}
-                    </label>
-                    <span className="text-white font-bold min-w-[48px] text-right">
-                      {Math.round(volume * 100)}%
-                    </span>
-                  </div>
-
-                  {/* 滑动条 */}
-                  <div className="relative w-full h-10 flex items-center">
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={Math.round(volume * 100)}
-                      onChange={(e) => {
-                        const newVolume = parseInt(e.target.value) / 100;
-                        setVolume(newVolume);
-                      }}
-                      onMouseUp={() => playSound('button_click')}
-                      className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer
-                        [&::-webkit-slider-thumb]:appearance-none
-                        [&::-webkit-slider-thumb]:w-6
-                        [&::-webkit-slider-thumb]:h-6
-                        [&::-webkit-slider-thumb]:rounded-full
-                        [&::-webkit-slider-thumb]:bg-yellow-400
-                        [&::-webkit-slider-thumb]:border-2
-                        [&::-webkit-slider-thumb]:border-yellow-300
-                        [&::-webkit-slider-thumb]:cursor-grab
-                        [&::-webkit-slider-thumb]:active:cursor-grabbing
-                        [&::-webkit-slider-thumb]:shadow-lg
-                        [&::-moz-range-thumb]:w-6
-                        [&::-moz-range-thumb]:h-6
-                        [&::-moz-range-thumb]:rounded-full
-                        [&::-moz-range-thumb]:bg-yellow-400
-                        [&::-moz-range-thumb]:border-2
-                        [&::-moz-range-thumb]:border-yellow-300
-                        [&::-moz-range-thumb]:cursor-grab
-                      "
-                      style={{
-                        background: `linear-gradient(to right, #facc15 0%, #facc15 ${volume * 100}%, #4b5563 ${volume * 100}%, #4b5563 100%)`,
-                      }}
-                    />
-                  </div>
-
-                  {/* 音量刻度提示 */}
-                  <div className="flex justify-between text-xs text-gray-500 mt-1 px-1">
-                    <span>{t('mute')}</span>
-                    <span>{t('max')}</span>
-                  </div>
-                </div>
-
-                {/* 光影设置 */}
-                <div className="mb-6 flex items-center justify-between gap-4">
-                  <label htmlFor="lighting-quality" className="text-gray-400 text-sm font-medium">{t('lighting')}</label>
-                  <select id="lighting-quality" className="bg-gray-800 text-gray-100 border border-gray-600 rounded px-3 py-2"
-                    value={lightingConfig.enabled ? lightingConfig.quality : 'off'}
-                    onChange={(event) => {
-                      const quality = event.target.value;
-                      setLightingConfig(previous => ({ ...previous, enabled: quality !== 'off',
-                        quality: quality === 'off' ? previous.quality : quality as LightingQuality }));
-                    }}>
-                    <option value="off">{t('lightingOff')}</option>
-                    <option value="basic">{t('lightingBasic')}</option>
-                    <option value="standard">{t('lightingStandard')}</option>
-                    <option value="high">{t('lightingHigh')}</option>
-                  </select>
-                </div>
-                <label className="mb-6 flex items-center gap-3 text-sm text-gray-300">
-                  <input type="checkbox" checked={lightingConfig.lightLevels === 4}
-                    onChange={(event) => setLightingConfig(previous => ({ ...previous,
-                      lightLevels: event.target.checked ? 4 : 0 }))} />
-                  {t('lightingSteps')}
-                </label>
-                {/* 语言切换 */}
-                <div className="flex justify-center items-center gap-3 mb-6">
-                  <span className="text-gray-400 text-sm font-medium">{t('language')}</span>
-                  <div className="flex rounded-lg overflow-hidden border border-gray-600">
-                    <button
-                      onClick={() => {
-                        switchLanguage('zh');
-                        playSound('button_click');
-                      }}
-                      className={`px-4 py-1.5 text-sm font-bold transition-all ${language === 'zh' ? 'bg-yellow-500 text-black' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
-                    >
-                      中文
-                    </button>
-                    <button
-                      onClick={() => {
-                        switchLanguage('en');
-                        playSound('button_click');
-                      }}
-                      className={`px-4 py-1.5 text-sm font-bold transition-all ${language === 'en' ? 'bg-yellow-500 text-black' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
-                    >
-                      English
-                    </button>
-                  </div>
-                </div>
-
-                {/* 静音快捷按钮 */}
-                <div className="flex justify-center mt-6 pt-4 border-t border-gray-700">
-                  <button
-                    onClick={() => {
-                      toggleMute();
-                      setTimeout(() => playSound('button_click'), 50);
-                    }}
-                    className={`px-6 py-2 rounded-lg font-bold text-sm transition-all duration-200 flex items-center gap-2 ${
-                      isMuted
-                        ? 'bg-red-600/80 hover:bg-red-500 text-white border border-red-400'
-                        : 'bg-green-600/80 hover:bg-green-500 text-white border border-green-400'
-                    }`}
-                  >
-                    {isMuted ? (
-                      <>
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                          />
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"
-                          />
-                        </svg>
-                        {t('clickUnmute')}
-                      </>
-                    ) : (
-                      <>
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                          />
-                        </svg>
-                        {t('clickMute')}
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
+            <SettingsDialog
+              t={t}
+              setShowSettings={setShowSettings}
+              volume={volume}
+              setVolume={setVolume}
+              playSound={playSound}
+              lightingConfig={lightingConfig}
+              setLightingConfig={setLightingConfig}
+              language={language}
+              switchLanguage={switchLanguage}
+              isMuted={isMuted}
+              toggleMute={toggleMute}
+            />
           )}
         </div>
 

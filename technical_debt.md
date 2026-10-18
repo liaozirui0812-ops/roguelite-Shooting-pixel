@@ -323,6 +323,8 @@
 
 ### R19 · P2 · 页面和 system context 暴露过多职责
 
+**2026-10-19 状态：部分推进（B1+B2 落地，层级倒置待 B3）。** page.tsx 已由 2544 行收敛至 720 行：资源装配（`useGameAssets`）、13 个界面组件（`components/game/`）、输入绑定（`useGameInput`）、地图生成（`game/map/` 纯函数）、阶段命令（`game/commands/` 六模块）全部抽出。B2 进一步收敛 `UpdateWorldContext`（45→40 字段）：`muzzleFlashesRef`/`recoilRef`/`screenShakeRef` 合并为单个 `viewFx` 对象（ref 本体仍由页面持有）；圆圆碰撞下沉为 `rules/geometry.ts` 的 `checkCircleCollision`，障碍物碰撞由 systems 直接引用 `checkCollisionWithObstacle`，context 不再传递这两个几何回调，page.tsx 删除对应闭包。回归假 context 同步更新，49 条全绿、tsc/eslint 0、check:assets 绿。**剩余**：`rules/damage.ts` → `systems/affixes` 的层级倒置（B3，设计文档标"需先迁移"）；`canvasRef`/`boomImage`/`playSound` 等表现依赖仍在 context 中（无 DOM 测试确需时再按原建议分离 viewport）；`renderWorld.ts` 未动（等 R25 帧耗时数据）。
+
 - **依据/文件**：`src/app/page.tsx` 仍集中资源、地图、阶段命令、换枪和 UI；`:1016` 装配 simulationContext。`src/game/systems/context.ts:24` 包含大量 setter、React RefObject、Canvas、图像及声音回调；`updateWorld.ts:43` 无 Canvas 则跳过主要模拟。`rules/damage.ts:2` 依赖同时包含规则与绘制的 systems/affixes；`model/World.ts:22` 引用 runtime 工厂。关联 TD-M01。
 - **影响**：新功能可能扩大页面/context，离线验证需要伪造表现对象；规则层依赖更高层实现。GameWorld 公开可变，setter/受控原地更新是约定，不能依赖类型自动防跨模块写入。当前没有证据表明这些依赖已形成环或导致程序启动错误。
 - **建议**：随 R02/R03 等具体工作抽出装备/阶段小命令；新 system 只取得所需字段。将纯伤害拦截函数与词缀绘制分开、内部用具体文件导入；若确需无 DOM 测试，再将模拟所需 viewport 尺寸与 Canvas 分离。保留 World/View 分工，不强制全世界深度不可变。

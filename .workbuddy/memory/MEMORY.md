@@ -32,15 +32,20 @@ $NODE scripts/check-assets.cjs
 - `technical_debt.md` — R01～R27 债务清单，带复现依据与验证方法
 - `docs/REFACTOR_PLAN.md` — 执行施工单（2026-10-18 创建）
 
-## 优化进度（2026-10-18）
+## 优化进度
 
-**已完成**：A2（删未用 shadcn 组件，src 源文件 113 → 62，仅留 `button.tsx` / `card.tsx`）、A3（package name + README 重写）、**批次 C 全部六项**（R12 淬毒图标接入 → R13 存储保护/语言保存接通 → R08 弹速浮点 → R10 hitTime → R14 选枪数值由配置生成 → R15 零权重+累积权重抽样）。回归 37 → 49，`check:assets` 转绿。
+**批次 A/C 已完成（2026-10-18）**：A2（删未用 shadcn，113→62 源文件）、A3（标识+README）、R08/R10/R12/R13/R14/R15 六项。回归 37→49，`check:assets` 转绿。
 
-**新增 `src/game/rules/weighted.ts`** 是现在唯一的加权抽样工具（resolveWeight / pickWeightedIndex / pickWeightedItem）；`offers.ts` 四处已迁移，`systems/spawnMonsters.ts:58` 还是旧写法（改刷怪分布会影响平衡，暂不动）。
+**批次 B1 已完成（2026-10-19）**：page.tsx **2544 → 735 行**，五个 Landing 各自独立提交且全绿：
+- `src/hooks/useGameAssets.ts`（资源装配，顺带移除 7 张死资源加载）
+- `src/components/game/` 13 个界面组件（机械抽取 + tsc 报告驱动补 props）
+- `src/hooks/useGameInput.ts`（输入绑定；world 可变引用语义已注释）
+- `src/game/map/`（buildMapBackground / buildObstacles 纯函数）
+- `src/game/commands/` 6 模块（level←shop←upgrade←completion 单向链，weapon、gameFlow；RunResetRefs 显式化 R17 合同）
 
-A1（删零引用依赖）**故意推迟**——唯一需要重装 `node_modules` 的条目，要与 A2 遗留的 UI 依赖合并成一次清理。
+**批次 B2 已完成（2026-10-19，commit 021d526）**：UpdateWorldContext 45→40 字段，page.tsx →720 行。`viewFx` 三合表现 ref；几何纯函数下沉 rules/geometry（`checkCircleCollision` + systems 直引 `checkCollisionWithObstacle`）。未做：checkLevelCompletion 直调命令会造成 systems→commands 反向依赖，需先定层级；rendererContext 未动。
 
-下一步：批次 B（page.tsx 拆分 B1.1 → B1.5 → B2 → B3），或批次 D 的政策表（R02/R16/R17/R18 加上新登记的 R27）。
+下一步：B3（rules/damage→systems/affixes 层级倒置，设计文档标"需先迁移"）、批次 D 政策表（R02/R16/R17/R18/R27）。B1 人工验收链（technical_debt.md §7）待用户跑。
 
 ## 新登记债务 R27（待政策确认，勿擅自修）
 

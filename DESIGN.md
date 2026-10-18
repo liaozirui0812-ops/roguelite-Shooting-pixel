@@ -106,7 +106,7 @@ flowchart TD
   Page --> Audio[useSound]
 ```
 
-模拟系统通过 `UpdateWorldContext` 接收 `world`、`runtime`、setter、碰撞与音效回调、页面 ref；因此目前并非完全脱离 React/DOM 的独立引擎。`rules/damage.ts` 还向上依赖 `systems/affixes.ts`；词缀对象同时包含规则与绘制方法。这些是现存边界例外，不应在新模块中扩大（TD-M01）。
+模拟系统通过 `UpdateWorldContext` 接收 `world`、`runtime`、setter、音效回调与少量页面 ref；B2 后碰撞几何（`checkCircleCollision` / `checkCollisionWithObstacle`）由 systems 直接引用 `rules/geometry.ts`，枪火/后坐力/震屏三个表现 ref 合并为单个 `viewFx` 字段传入。context 仍含 `canvasRef` 与音效/图像回调，因此目前并非完全脱离 React/DOM 的独立引擎。`rules/damage.ts` 还向上依赖 `systems/affixes.ts`；词缀对象同时包含规则与绘制方法。这些是现存边界例外，不应在新模块中扩大（TD-M01）。
 
 世界对象由 runtime 持有，`runtime.state` 的对象身份保持稳定，字段和实体可被替换。页面常驻监听器通过这个稳定容器读取最新状态。React 读取 `view` 快照，Canvas 读取 `world` 实时数据；二者更新频率不同。
 

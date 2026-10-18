@@ -176,6 +176,16 @@ src/components/game/
 
 ### B2 · 收敛 `UpdateWorldContext`（context.ts）
 
+✅ 已完成（2026-10-19，commit `021d526`）。落地内容：
+
+- **viewFx 三合**：`muzzleFlashesRef` / `recoilRef` / `screenShakeRef` 合并为 `ViewFxRefs` 单个 `viewFx` 字段传入（ref 本体仍由页面持有，rendererContext 与 `RunResetRefs` 合同不变）。改动：`context.ts`、`updateWorld.ts`、`weaponSystem.ts`、page.tsx 装配点。
+- **几何下沉**：page.tsx 的 `checkCollision`（圆圆）移为 `rules/geometry.ts` 的 `checkCircleCollision`；`checkRectCollision` 薄封装删除，四个 system（enemyAttack/movement/monster/projectile）直接引用 `checkCollisionWithObstacle`。context 减 2 个回调字段，page.tsx 删 2 个闭包。
+- 结果：`UpdateWorldContext` 45→40 字段，page.tsx 735→720 行；回归假 context 同步更新（渲染测试改为从 `viewFx` 取单个 ref 装配 rendererContext）。验证：tsc 0 / eslint 0 / 回归 49 绿 / check:assets 绿。
+
+**未做（保留原判断）**：`canvasRef` / `boomImage` / `playSound` / `stopBGM` / `checkLevelCompletion` 仍留在 context——`checkLevelCompletion` 直接改调命令模块会让 systems 反向依赖 commands，需先定层级归属；viewport 尺寸不提前塞进 World（见下）。`rendererContext` 未动。
+
+原核对与禁区备查：
+
 **核对结果**：接口共有约 45 个字段（`context.ts:29`–`:106`），其中混入了 7 个 `React.RefObject`（`canvasRef` / `dashRef` / `dashPendingRef` / `dashCooldownStartRef` / `muzzleFlashesRef` / `recoilRef` / `screenShakeRef`）、`boomImage`、`playSound` / `stopBGM`、以及 `triggerExplosion` / `triggerVampireHeal` / `triggerScreenShake` / `checkLevelCompletion` 等页面回调。这直接导致"离线验证需要伪造 Canvas 与音频"。
 
 **建议顺序**：不要在 B1 完成前单独重构它。正确做法是 **B1.4 落地时同步收窄**——每抽出一个命令，就把 context 里对应的回调改成命令模块直接调用，字段随之减少。
@@ -270,7 +280,7 @@ src/components/game/
 第一步（约半天）：A2 → A3                    ✅ 已完成
 第二步（约半天）：R12 → R13                  ✅ 已完成，check:assets 已转绿
 第三步（约半天）：R08 → R10 → R14 → R15        ✅ 已完成，C 批次全部收口
-第四步（2-3 天）  ：B1.1 → B1.5 → B2 → B3      核心拆分，逐项验证
+第四步（2-3 天）  ：B1.1 → B1.5 → B2 → B3      B1/B2 ✅ 已完成；剩 B3（damage→affixes 层级倒置）
 第五步（政策表）  ：D 批次确认后再开（含本次新增登记的 R27）
 ```
 

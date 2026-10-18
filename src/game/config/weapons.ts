@@ -106,6 +106,24 @@ export const WEAPONS: Record<WeaponType, WeaponConfig> = {
   },
 };
 
+// 武器自带基础穿透点数（0 表示子弹只能击中 1 个敌人）
+// createPlayer / acquireWeapon 都从这里取值，避免同一事实在多处硬编码后漂移
+export const WEAPON_BASE_PENETRATION: Record<WeaponType, number> = {
+  pistol: 0,
+  shotgun: 0,
+  sniper: 1,
+  smg: 0,
+  rpg: 0,
+};
+
+// 火箭弹基础爆炸参数。实际命中还会被穿甲弹（×3 伤害 / ×0.2 范围）
+// 与两联装（×0.6 伤害 / ×0.7 范围）修正，因此展示时只能标称"基础"值；
+// 最终伤害合同仍待 R06/R20 确认，不要在展示层把它包装成确定伤害。
+export const RPG_EXPLOSION_BASE: { radius: number; damage: number } = {
+  radius: 150, // 基础爆炸半径（px）
+  damage: 120, // 基础爆炸伤害
+};
+
 // 稀有度配置：达成对应武器价值所需阈值
 export const RARITY_META: Record<number, { name: string; color: string; threshold: number }> = {
   1: { name: '普通', color: '#ffffff', threshold: 0 },
@@ -186,7 +204,34 @@ export const AFFIX_LABEL: Record<WeaponAffixId, (v: number) => string> = {
   fireRate: (v) => `+${v}%`,
 };
 
+// 每把武器额外展示的一条特色属性，取值同样来自配置，避免手写后与配置漂移
+const STARTER_FEATURE_LINE: Record<WeaponType, (cfg: WeaponConfig) => string> = {
+  pistol: (cfg) => `移动速度: +${cfg.playerSpeedBonus ?? 0}`,
+  shotgun: (cfg) => `暴击率: ${Math.round(cfg.critRate * 100)}%`,
+  sniper: (cfg) => `穿透: ${WEAPON_BASE_PENETRATION[cfg.id]}`,
+  smg: (cfg) => `暴击率: ${Math.round(cfg.critRate * 100)}%`,
+  rpg: () => `爆炸范围: ${RPG_EXPLOSION_BASE.radius}px`,
+};
+
+// 伤害行：多弹丸武器标成「单发伤害×弹丸数」；火箭筒的直接伤害为 0，生效的是爆炸伤害
+const buildDamageLine = (cfg: WeaponConfig): string =>
+  cfg.id === 'rpg'
+    ? `基础爆炸伤害: ${RPG_EXPLOSION_BASE.damage}`
+    : cfg.bulletsPerShot > 1
+      ? `伤害: ${cfg.damage}×${cfg.bulletsPerShot}`
+      : `伤害: ${cfg.damage}`;
+
+// 由 WEAPONS 生成展示属性：伤害 / 射速 / 弹容量 + 一条特色属性
+const buildStarterStats = (cfg: WeaponConfig): string[] => [
+  buildDamageLine(cfg),
+  `射速: ${(1000 / cfg.fireRate).toFixed(1)}发/秒`,
+  `弹容量: ${cfg.magazineSize}`,
+  STARTER_FEATURE_LINE[cfg.id](cfg),
+];
+
 // 初始武器选择界面展示信息（边框/标题色 + 属性文本）
+// R14：stats 全部由 WEAPONS 生成。此前手写值（手枪移动速度 +1、散弹暴击 30%）
+// 与配置实际值（+0.5、20%）不一致，玩家按错误信息选枪。
 export const STARTER_WEAPON_META: Record<
   WeaponType,
   { border: string; title: string; stats: string[] }
@@ -194,26 +239,26 @@ export const STARTER_WEAPON_META: Record<
   pistol: {
     border: 'border-yellow-500/50 hover:border-yellow-400',
     title: 'text-yellow-400',
-    stats: ['伤害: 5', '射速: 3.3发/秒', '弹容量: 12', '移动速度: +1'],
+    stats: buildStarterStats(WEAPONS.pistol),
   },
   shotgun: {
     border: 'border-red-500/50 hover:border-red-400',
     title: 'text-red-400',
-    stats: ['伤害: 15×5', '射速: 1.3发/秒', '弹容量: 7', '暴击率: 30%'],
+    stats: buildStarterStats(WEAPONS.shotgun),
   },
   sniper: {
     border: 'border-green-500/50 hover:border-green-400',
     title: 'text-green-400',
-    stats: ['伤害: 50', '射速: 0.8发/秒', '弹容量: 8', '穿透: 1'],
+    stats: buildStarterStats(WEAPONS.sniper),
   },
   smg: {
     border: 'border-cyan-500/50 hover:border-cyan-400',
     title: 'text-cyan-400',
-    stats: ['伤害: 6', '射速: 12.5发/秒', '弹容量: 30', '暴击率: 10%'],
+    stats: buildStarterStats(WEAPONS.smg),
   },
   rpg: {
     border: 'border-orange-500/50 hover:border-orange-400',
     title: 'text-orange-400',
-    stats: ['伤害: 120', '射速: 0.5发/秒', '弹容量: 5', '爆炸范围: 250px'],
+    stats: buildStarterStats(WEAPONS.rpg),
   },
 };

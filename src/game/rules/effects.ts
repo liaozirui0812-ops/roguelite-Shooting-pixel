@@ -74,9 +74,11 @@ export const SHOP_EFFECTS: Record<
   weapon_sniper: (player, value, random) => acquireWeapon(player, 'sniper', random),
   weapon_shotgun: (player, value, random) => acquireWeapon(player, 'shotgun', random),
   weapon_rpg: (player, value, random) => acquireWeapon(player, 'rpg', random),
+  // R08：弹速保留浮点。此前 Math.floor 会让 +10% 增益在 2.5/3.5/1.2 等基础值上产生负收益
+  // （floor(2.5×1.1)=2），正增益升级反而降低弹速。展示侧统一由 renderWorld 的 toFixed(1) 格式化。
   bulletSpeed: (player, value, random) => ({
     ...player,
-    bulletSpeed: Math.floor(player.bulletSpeed * (1 + value / 100)),
+    bulletSpeed: player.bulletSpeed * (1 + value / 100),
   }),
   fireBuff: (player, value, random) => ({ ...player, fireBuffLevel: player.fireBuffLevel + value }),
   poisonBuff: (player, value, random) => ({

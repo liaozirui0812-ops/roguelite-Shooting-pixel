@@ -453,7 +453,7 @@ export const SHOP_ITEM_CONFIGS: Record<
   },
   poisonBuff: {
     name: '淬毒',
-    icon: '/assets/poison.png',
+    icon: '/assets/poison_buff.png',
     basePrice: 20,
     levelPriceFactor: 15,
     isPercentage: false,

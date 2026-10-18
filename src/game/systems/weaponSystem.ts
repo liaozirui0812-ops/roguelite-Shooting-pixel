@@ -8,6 +8,7 @@ import {
   getWeaponMagazine,
   Bullet,
   hasGrowthChainNode,
+  RPG_EXPLOSION_BASE,
 } from '@/game';
 
 import type { UpdateWorldContext, TickContext } from './context';
@@ -252,8 +253,8 @@ export function weaponSystem(context: UpdateWorldContext, tick: TickContext) {
         const rocketFinalSpeed = rocketBaseFinalSpeed + Math.max(0, bulletSpeedBonus); // 最终速度只受增益影响
 
         // 火箭弹参数（根据Buff调整）
-        let rpgExplosionRadius = 150; // 基础爆炸半径
-        let rpgExplosionDamage = 120; // 基础爆炸伤害
+        let rpgExplosionRadius = RPG_EXPLOSION_BASE.radius; // 基础爆炸半径
+        let rpgExplosionDamage = RPG_EXPLOSION_BASE.damage; // 基础爆炸伤害
         let rpgScale = 1; // 火箭弹和烟雾的缩放比例
 
         if (hasRPGAPShot) {

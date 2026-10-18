@@ -21,7 +21,7 @@ export const GROWTH_CHAIN_NODES: Record<GrowthChainNodeId, GrowthChainNode> = {
     requiredPrevTierCount: 0,
     weight: 100,
     priceFormula: (level) => 8 * level + 10,
-    icon: '/assets/poison.png',
+    icon: '/assets/poison_expand.png',
     apply: (player) => ({
       ...player,
       growthChainNodes: [...player.growthChainNodes, 'poison_circle_expand_1'],
@@ -36,7 +36,7 @@ export const GROWTH_CHAIN_NODES: Record<GrowthChainNodeId, GrowthChainNode> = {
     requiredPrevTierCount: 0,
     weight: 100,
     priceFormula: (level) => 10 * level,
-    icon: '/assets/poison.png',
+    icon: '/assets/poison_enhance.png',
     apply: (player) => ({
       ...player,
       growthChainNodes: [...player.growthChainNodes, 'poison_enhance_1'],
@@ -52,7 +52,7 @@ export const GROWTH_CHAIN_NODES: Record<GrowthChainNodeId, GrowthChainNode> = {
     requiredPrevTierCount: 1,
     weight: (level) => 50 + 2 * level,
     priceFormula: (level) => 20 * level,
-    icon: '/assets/poison.png',
+    icon: '/assets/poison_enhance.png',
     apply: (player) => ({
       ...player,
       growthChainNodes: [...player.growthChainNodes, 'poison_toxic_2'],
@@ -67,7 +67,7 @@ export const GROWTH_CHAIN_NODES: Record<GrowthChainNodeId, GrowthChainNode> = {
     requiredPrevTierCount: 1,
     weight: 100,
     priceFormula: (level) => 30 + level * level,
-    icon: '/assets/poison.png',
+    icon: '/assets/poison_buff.png',
     apply: (player) => ({
       ...player,
       growthChainNodes: [...player.growthChainNodes, 'poison_infection_2'],
@@ -82,7 +82,7 @@ export const GROWTH_CHAIN_NODES: Record<GrowthChainNodeId, GrowthChainNode> = {
     requiredPrevTierCount: 1,
     weight: 100,
     priceFormula: (level) => 30 + level * level,
-    icon: '/assets/poison.png',
+    icon: '/assets/poison_expand.png',
     apply: (player) => ({
       ...player,
       growthChainNodes: [...player.growthChainNodes, 'poison_circle_expand_2'],
@@ -97,7 +97,7 @@ export const GROWTH_CHAIN_NODES: Record<GrowthChainNodeId, GrowthChainNode> = {
     requiredPrevTierCount: 1,
     weight: (level) => 50 + 2 * level,
     priceFormula: (level) => 20 * level,
-    icon: '/assets/poison.png',
+    icon: '/assets/poison_enhance.png',
     apply: (player) => ({
       ...player,
       growthChainNodes: [...player.growthChainNodes, 'poison_faster_2'],
@@ -113,7 +113,7 @@ export const GROWTH_CHAIN_NODES: Record<GrowthChainNodeId, GrowthChainNode> = {
     requiredPrevTierCount: 2,
     weight: (level) => 50 + 2 * level,
     priceFormula: (level) => 40 * level,
-    icon: '/assets/poison.png',
+    icon: '/assets/poison_buff.png',
     apply: (player) => ({
       ...player,
       growthChainNodes: [...player.growthChainNodes, 'poison_absorb_3'],

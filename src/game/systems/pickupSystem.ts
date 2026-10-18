@@ -55,7 +55,8 @@ export function pickupSystem(context: UpdateWorldContext, tick: TickContext) {
                   Math.floor(prevPlayer.weaponRange * weaponUpgradeMultiplier),
                   MAX_VALUES.weaponRange
                 ),
-                bulletSpeed: Math.floor(prevPlayer.bulletSpeed * weaponUpgradeMultiplier),
+                // R08：同上，武器升级箱的正增益不得因取整降低弹速
+                bulletSpeed: prevPlayer.bulletSpeed * weaponUpgradeMultiplier,
                 currentAmmo: getWeaponMagazine(prevPlayer, world.player.weapon), // 补满弹夹
               };
               // 限制武器属性加成不超过最大值

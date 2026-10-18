@@ -364,7 +364,9 @@ export function explodeWorld(
             deathAnimationProgress: 0,
           };
         } else {
-          let updatedMonster = { ...affixExpMonster, hp: newHp, isHit: true, lastHitTime: now };
+          // R10：Monster 的受击时间戳字段是 hitTime（monsterSystem/renderWorld 都读它），
+          // 此前写成未被任何代码消费的 lastHitTime，导致非致死命中的减速与受击表现使用过期时间戳。
+          let updatedMonster = { ...affixExpMonster, hp: newHp, isHit: true, hitTime: now };
 
           // 冲击波Buff：对未死亡的敌人进行击退和减速
           if (hasShockwave && dist > 0) {

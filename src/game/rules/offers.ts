@@ -17,6 +17,7 @@ import {
   ValueTier,
   VALUE_TIERS,
 } from '@/game';
+import { pickWeightedIndex, pickWeightedItem, resolveWeight } from './weighted';
 
 export function buildUpgradeOffers(
   currentWeapon: WeaponType,
@@ -317,11 +318,11 @@ export function buildUpgradeOffers(
     }
   }
 
-  // 根据权重随机选择3个不重复升级
+  // R15：显式 0 权重不再参与抽取（`weight || 1` 会把 0 误当成缺省值，例如 L≥20 的金币奖励），
+  // 同时改用累积权重抽样，小数权重不再被 floor 复制次数时截断。
   const selected: Upgrade[] = [];
-  const available: Upgrade[] = [];
+  const candidates: Upgrade[] = [];
 
-  // 根据权重创建加权数组，并过滤掉已达到最大值的升级
   dynamicUpgrades.forEach((upgrade) => {
     // 检查是否已达到最大值
     if (isAtMaxValue(currentPlayer, upgrade.id)) {
@@ -336,25 +337,23 @@ export function buildUpgradeOffers(
       return; // 跳过这个升级
     }
 
-    const weight = upgrade.weight || 1;
-    for (let i = 0; i < weight; i++) {
-      available.push(upgrade);
-    }
+    // 缺省（undefined）补 1；显式的 0 / 非法值不入池
+    const weight = resolveWeight(upgrade.weight);
+    if (weight > 0) candidates.push(upgrade);
   });
 
-  while (selected.length < 3 && available.length > 0) {
-    const randomIndex = Math.floor(random() * available.length);
-    const upgrade = available[randomIndex];
+  const hasWeight = (upgrade: Upgrade) => resolveWeight(upgrade.weight);
 
-    // 检查是否已选择该升级
-    if (!selected.find((u) => u.id === upgrade.id)) {
-      selected.push(upgrade);
-    }
+  while (selected.length < 3 && candidates.length > 0) {
+    const index = pickWeightedIndex(candidates.map(hasWeight), random);
+    if (index < 0) break;
+    selected.push(candidates[index]);
 
-    // 移除该升级的所有实例
-    for (let i = available.length - 1; i >= 0; i--) {
-      if (available[i].id === upgrade.id) {
-        available.splice(i, 1);
+    // 移除该升级的所有实例（按 Upgrade.id 类别去重，合同不变）
+    const pickedId = candidates[index].id;
+    for (let i = candidates.length - 1; i >= 0; i--) {
+      if (candidates[i].id === pickedId) {
+        candidates.splice(i, 1);
       }
     }
   }
@@ -436,7 +435,7 @@ export function buildShopOffers(
 
   const remainingCount = 3 - preserved.length;
 
-  for (let i = 0; i < remainingCount; i++) {
+  itemSlot: for (let i = 0; i < remainingCount; i++) {
     // 构建加权商品池
     interface WeightedItem {
       type: 'normal' | 'growthChain';
@@ -463,11 +462,10 @@ export function buildShopOffers(
         continue;
       }
 
-      // 获取商品权重
+      // 获取商品权重：缺省（undefined）回退 100，显式的 0 / 非法值不入池（R15）
       const config = SHOP_ITEM_CONFIGS[type];
-      const weight = typeof config.weight === 'number' ? config.weight : 100;
-
-      for (let j = 0; j < weight; j++) {
+      const weight = resolveWeight(config.weight, 100);
+      if (weight > 0) {
         weightedPool.push({ type: 'normal', shopType: type, weight });
       }
     }
@@ -504,9 +502,11 @@ export function buildShopOffers(
           node.baseBuff === 'rpg_ap_shot' ||
           node.baseBuff === 'rpg_dual_barrel'
         ) {
-          const weight =
+          // 同上：0 权重节点不入池，且不再按权重复制数组（R15）
+          const rawWeight =
             typeof node.weight === 'function' ? node.weight(currentLevel) : node.weight;
-          for (let j = 0; j < weight; j++) {
+          const weight = resolveWeight(rawWeight);
+          if (weight > 0) {
             weightedPool.push({ type: 'growthChain', growthNodeId: nodeId, weight });
           }
         }
@@ -516,8 +516,13 @@ export function buildShopOffers(
     // 如果没有可用商品，跳过
     if (weightedPool.length === 0) continue;
 
-    // 随机选择一个商品
-    const selected = weightedPool[Math.floor(random() * weightedPool.length)];
+    // 随机选择一个商品（累积权重抽样，每次抽取消耗一次 random()）
+    const selected = pickWeightedItem(
+      weightedPool,
+      weightedPool.map((item) => item.weight),
+      random
+    );
+    if (!selected) continue;
 
     if (selected.type === 'growthChain' && selected.growthNodeId) {
       // 成长链节点商品
@@ -607,17 +612,24 @@ export function buildShopOffers(
           description = '+1 险中取胜等级';
         } else {
           // 其他商品：根据权重随机选择数值档位
-          const weightedTiers: { tier: ValueTier; value: number }[] = [];
+          // 数值档：同样改用累积权重抽样，小数权重按真实比例生效（R15）
+          const weightedTiers: { tier: ValueTier; value: number; weight: number }[] = [];
           VALUE_TIERS.forEach((tier) => {
-            const weight = tier.weightFormula(currentLevel);
+            const weight = resolveWeight(tier.weightFormula(currentLevel));
             const tierValue =
               typeof tier.value === 'function' ? tier.value(currentLevel) : tier.value;
-            for (let j = 0; j < weight; j++) {
-              weightedTiers.push({ tier, value: tierValue });
+            if (weight > 0) {
+              weightedTiers.push({ tier, value: tierValue, weight });
             }
           });
 
-          const selectedTier = weightedTiers[Math.floor(random() * weightedTiers.length)];
+          const selectedTier = pickWeightedItem(
+            weightedTiers,
+            weightedTiers.map((entry) => entry.weight),
+            random
+          );
+          // 数值档全部为 0 权重时跳过本槽（此前会取到 undefined 并抛错）
+          if (!selectedTier) continue itemSlot;
           value = selectedTier.value;
           // 价格 = basePrice + levelPriceFactor × 关卡数 + 数值 × 2
           // 使用加法公式避免高数值商品价格过高

@@ -697,3 +697,194 @@ test('restored map objects block walking and bullets while sampled dash collisio
   }
   assert.equal(context.dashRef.current.active, false);
 });
+
+// R13: 语言读取在存储异常与非法值时回退默认语言，且不失合法值
+{
+  const { loadLanguage } = require('../src/i18n.ts');
+
+  test('loadLanguage returns default when window is unavailable', () => {
+    delete global.window;
+    assert.equal(loadLanguage(), 'zh');
+  });
+
+  test('loadLanguage returns default when storage access throws', () => {
+    global.window = {
+      localStorage: {
+        getItem() {
+          throw new Error('SecurityError: storage disabled');
+        },
+      },
+    };
+    try {
+      assert.equal(loadLanguage(), 'zh');
+    } finally {
+      delete global.window;
+    }
+  });
+
+  test('loadLanguage keeps stored zh/en and rejects invalid values', () => {
+    global.window = { localStorage: { getItem: () => 'en' } };
+    try {
+      assert.equal(loadLanguage(), 'en');
+    } finally {
+      delete global.window;
+    }
+    global.window = { localStorage: { getItem: () => 'xx' } };
+    try {
+      assert.equal(loadLanguage(), 'zh');
+    } finally {
+      delete global.window;
+    }
+  });
+}
+
+// R08: 正向升级不得因取整降低弹速（配置里存在 1.2 / 2.5 / 3.5 等浮点基础弹速）
+{
+  const { SHOP_EFFECTS } = require('../src/game/rules/effects.ts');
+
+  test('bullet speed shop upgrade is strictly increasing for every base speed', () => {
+    for (const base of [1.2, 2.5, 3, 3.5, 5]) {
+      let player = { bulletSpeed: base };
+      for (const pct of [3, 10, 12, 25]) {
+        const next = SHOP_EFFECTS.bulletSpeed(player, pct, () => 0.5);
+        assert.ok(
+          next.bulletSpeed > player.bulletSpeed,
+          `基础弹速 ${base} 的 +${pct}% 增益不得降低或持平：${player.bulletSpeed} -> ${next.bulletSpeed}`
+        );
+        player = next;
+      }
+      assert.ok(player.bulletSpeed > base);
+    }
+  });
+
+  test('weapon_upgrade never lowers bullet speed for any starter weapon', () => {
+    for (const weaponType of ['pistol', 'smg', 'rpg']) {
+      let player = createPlayer(weaponType);
+      const start = player.bulletSpeed;
+      for (let i = 0; i < 5; i++) {
+        const next = applyUpgradeEffect(player, 'weapon_upgrade', 3, () => 0.5);
+        assert.ok(
+          next.bulletSpeed > player.bulletSpeed,
+          `${weaponType} 第 ${i + 1} 次武器升级后弹速应增加：${player.bulletSpeed} -> ${next.bulletSpeed}`
+        );
+        player = next;
+      }
+      assert.ok(player.bulletSpeed > start);
+    }
+  });
+}
+
+// R15: 零权重不得入池、缺省值与 0 要区分、小数权重按比例生效
+{
+  const { resolveWeight, pickWeightedIndex } = require('../src/game/rules/weighted.ts');
+
+  test('resolveWeight distinguishes a configured 0 from a missing weight', () => {
+    assert.equal(resolveWeight(undefined), 1); // 未配置才用缺省 1
+    assert.equal(resolveWeight(undefined, 100), 100);
+    assert.equal(resolveWeight(0), 0); // 显式 0 保持 0，不参与抽取
+    assert.equal(resolveWeight(-5), 0);
+    assert.equal(resolveWeight(NaN), 0);
+    assert.equal(resolveWeight(2.5), 2.5); // 小数权重原样保留
+  });
+
+  test('pickWeightedIndex skips zero weights and honours fractional ones', () => {
+    const weights = [0, 1, 3];
+    assert.equal(pickWeightedIndex(weights, () => 0), 1);
+    assert.equal(pickWeightedIndex(weights, () => 0.999), 2);
+    assert.equal(pickWeightedIndex([0.5, 0.5], () => 0.5), 1);
+    assert.equal(pickWeightedIndex([0, 0], () => 0.5), -1);
+    assert.equal(pickWeightedIndex([], () => 0.5), -1);
+  });
+
+  // 用固定的 random 返回值扫描整条累积分布：只要某个候选还在池子里，
+  // 就一定存在能选中它的取值，因此这是确定性与穷尽性都成立的验证方式
+  const SAMPLES = 1500;
+  const sweep = (level) => {
+    const found = new Set();
+    let goldRewardHits = 0;
+    for (let i = 0; i < SAMPLES; i++) {
+      const offers = buildUpgradeOffers('pistol', level, createPlayer('pistol'), () => i / SAMPLES);
+      const ids = offers.map((offer) => offer.id);
+      assert.equal(new Set(ids).size, ids.length, '同一屏报价不得重复同一类别');
+      assert.ok(ids.length > 0 && ids.length <= 3);
+      ids.forEach((id) => found.add(id));
+      if (ids.includes('gold_reward')) goldRewardHits++;
+    }
+    return { found, goldRewardHits };
+  };
+
+  test('an upgrade whose weight decayed to 0 can never be offered (gold reward at L>=20)', () => {
+    for (const level of [20, 25]) {
+      const { goldRewardHits } = sweep(level);
+      assert.equal(goldRewardHits, 0, `L${level} 金币奖励权重为 0，不应出现在报价中`);
+    }
+  });
+
+  test('zero-weight filtering does not remove upgrades that still have weight', () => {
+    const { goldRewardHits } = sweep(1);
+    assert.ok(goldRewardHits > 0, 'L1 金币奖励权重为 28.5，修复后仍应能被抽到');
+  });
+}
+{
+  const {
+    STARTER_WEAPON_META,
+    WEAPONS,
+    WEAPON_BASE_PENETRATION,
+  } = require('../src/game/config/weapons.ts');
+
+  test('starter weapon cards are generated from WEAPONS config', () => {
+    const starters = Object.keys(WEAPONS).filter((w) => WEAPONS[w].isStarter);
+    assert.deepEqual(starters, ['pistol', 'shotgun', 'smg']);
+    for (const w of starters) {
+      const cfg = WEAPONS[w];
+      const stats = STARTER_WEAPON_META[w].stats;
+      const expectedDamage =
+        cfg.bulletsPerShot > 1
+          ? `伤害: ${cfg.damage}×${cfg.bulletsPerShot}`
+          : `伤害: ${cfg.damage}`;
+      assert.equal(stats.length, 4, `${w} 应展示 4 行`);
+      assert.equal(stats[0], expectedDamage);
+      assert.equal(stats[1], `射速: ${(1000 / cfg.fireRate).toFixed(1)}发/秒`);
+      assert.equal(stats[2], `弹容量: ${cfg.magazineSize}`);
+    }
+    // 旧的手写值与配置不一致：手枪 +1（实际 +0.5）、散弹暴击 30%（实际 20%）
+    assert.ok(STARTER_WEAPON_META.pistol.stats.includes('移动速度: +0.5'));
+    assert.ok(!STARTER_WEAPON_META.pistol.stats.includes('移动速度: +1'));
+    assert.ok(STARTER_WEAPON_META.shotgun.stats.includes('暴击率: 20%'));
+    assert.ok(!STARTER_WEAPON_META.shotgun.stats.includes('暴击率: 30%'));
+    assert.ok(STARTER_WEAPON_META.smg.stats.includes('暴击率: 10%'));
+  });
+
+  test('base penetration is shared between the starter card and initial player creation', () => {
+    assert.equal(STARTER_WEAPON_META.sniper.stats.includes('穿透: 1'), true);
+    for (const w of Object.keys(WEAPONS)) {
+      // createPlayer 与 equipWeaponFields 现在都取 WEAPON_BASE_PENETRATION，改配置两边同时生效
+      assert.equal(createPlayer(w).penetration, WEAPON_BASE_PENETRATION[w]);
+    }
+    assert.equal(createPlayer('sniper').penetration, 1);
+    assert.equal(createPlayer('pistol').penetration, 0);
+  });
+}
+{
+  const { explodeWorld } = require('../src/game/systems/explosion.ts');
+
+  test('surviving explosion hit stamps hitTime with current simulation time', () => {
+    const runtime = live();
+    runtime.state.monsters = [enemy('explosionSurvivor', 100)];
+    const context = {
+      runtime,
+      world: runtime.state,
+      boomImage: null,
+      playSound() {},
+      triggerScreenShake() {},
+      triggerVampireHeal() {},
+    };
+    runtime.step(() => explodeWorld(context, 3100, 3000, 150, 10));
+    const survivor = runtime.state.monsters[0];
+    assert.equal(survivor.isDying, false);
+    assert.equal(survivor.isHit, true);
+    assert.equal(survivor.hitTime, runtime.now());
+    assert.equal(survivor.hp, 90);
+    assert.equal('lastHitTime' in survivor, false);
+  });
+}

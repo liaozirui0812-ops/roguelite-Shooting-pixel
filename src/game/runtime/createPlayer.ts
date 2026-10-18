@@ -1,6 +1,6 @@
 import type { Player, WeaponType } from '@/game/model/types';
 import { GAME_CONFIG } from '@/game/config/base';
-import { WEAPONS } from '@/game/config/weapons';
+import { WEAPONS, WEAPON_BASE_PENETRATION } from '@/game/config/weapons';
 
 export function createPlayer(weaponType: WeaponType = 'pistol'): Player {
   const selectedWeapon = WEAPONS[weaponType];
@@ -28,7 +28,7 @@ export function createPlayer(weaponType: WeaponType = 'pistol'): Player {
     bulletSpeed: selectedWeapon.bulletSpeed,
     critRate: selectedWeapon.critRate, // 初始暴击率（使用武器配置）
     critDamage: 1.5, // 初始暴击伤害倍率（150%）
-    penetration: weaponType === 'sniper' ? 1 : 0, // 狙击枪自带穿透
+    penetration: WEAPON_BASE_PENETRATION[weaponType], // 狙击枪自带穿透
     currentAmmo: selectedWeapon.magazineSize, // 当前弹匣子弹数
     isReloading: false, // 是否正在换弹
     reloadStartTime: 0, // 换弹开始时间

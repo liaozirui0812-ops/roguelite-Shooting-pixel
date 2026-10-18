@@ -93,7 +93,8 @@ export function applyUpgradeEffect(
         Math.floor(prev.weaponRange * weaponUpgradeRangeMultiplier),
         MAX_VALUES.weaponRange
       );
-      newPlayer.bulletSpeed = Math.floor(prev.bulletSpeed * weaponUpgradeMultiplier);
+      // R08：与 SHOP_EFFECTS.bulletSpeed 一致保留浮点，避免正增益被取整成负收益
+      newPlayer.bulletSpeed = prev.bulletSpeed * weaponUpgradeMultiplier;
       // 限制武器属性加成不超过最大值
       newPlayer.damageBonus = Math.min(newPlayer.damageBonus + value, MAX_VALUES.weaponUpgrade);
       newPlayer.fireRateBonus = Math.min(newPlayer.fireRateBonus + value, MAX_VALUES.weaponUpgrade);

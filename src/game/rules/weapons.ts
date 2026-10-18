@@ -4,6 +4,7 @@ import {
   WEAPON_AFFIX_POOL,
   AFFIX_LABEL,
   WEAPONS,
+  WEAPON_BASE_PENETRATION,
 } from '@/game/config/weapons';
 import type { WeaponInstance, WeaponAffix, Player, WeaponType } from '@/game/model/types';
 
@@ -162,7 +163,7 @@ export const equipWeaponFields = (
     weaponRange: cfg.bulletRange,
     bulletSpeed: cfg.bulletSpeed,
     critRate: cfg.critRate,
-    penetration: (pp.penetrationBonus || 0) + (weaponType === 'sniper' ? 1 : 0),
+    penetration: (pp.penetrationBonus || 0) + WEAPON_BASE_PENETRATION[weaponType],
     playerSpeed:
       1 + (cfg.playerSpeedBonus || 0) + (pp.playerSpeedBonus || 0) / 100 + s.moveSpeed / 100,
     currentAmmo: cfg.magazineSize + (pp.magazineSizeBonus || 0) + s.magazine,

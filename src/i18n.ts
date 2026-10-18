@@ -245,11 +245,15 @@ const dict: Record<string, Entry> = {
   weaponSelectHint: { zh: '点击选择你的第一把武器', en: 'Pick your first weapon' },
 };
 
-// 读取当前语言
+// 读取当前语言；存储不可用（隐私模式/禁用）时回退默认值
 export function loadLanguage(): Language {
   if (typeof window === 'undefined') return DEFAULT_LANGUAGE;
-  const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-  return stored === 'en' || stored === 'zh' ? stored : DEFAULT_LANGUAGE;
+  try {
+    const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+    return stored === 'en' || stored === 'zh' ? stored : DEFAULT_LANGUAGE;
+  } catch {
+    return DEFAULT_LANGUAGE;
+  }
 }
 
 // 翻译函数

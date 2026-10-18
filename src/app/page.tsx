@@ -126,7 +126,12 @@ export default function TopDownShooterGame() {
   const t = useCallback((key: string) => translate(key, languageRef.current), []);
   const switchLanguage = useCallback((lang: Language) => {
     setLanguage(lang);
-    if (typeof window !== 'undefined') window.localStorage.setItem(LOCALE_STORAGE_KEY, lang);
+    // 存储失败时仅保留内存中的语言设置
+    try {
+      if (typeof window !== 'undefined') window.localStorage.setItem(LOCALE_STORAGE_KEY, lang);
+    } catch {
+      /* localStorage 不可用时忽略 */
+    }
   }, []);
 
   // 加载美术素材图片
@@ -236,9 +241,17 @@ export default function TopDownShooterGame() {
   useEffect(() => {
     // 从localStorage读取最高分数（仅在客户端执行）
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('dungeonGameHighScore');
-      if (saved) {
-        setHighScore(parseInt(saved, 10));
+      try {
+        const saved = localStorage.getItem('dungeonGameHighScore');
+        if (saved) {
+          const parsed = Number.parseInt(saved, 10);
+          // 只接受合法的非负有限整数，损坏值（NaN/负数/非法字符串）忽略
+          if (Number.isFinite(parsed) && parsed >= 0) {
+            setHighScore(parsed);
+          }
+        }
+      } catch {
+        // 存储不可用时忽略，保留内存中的默认值
       }
     }
   }, []);
@@ -248,7 +261,11 @@ export default function TopDownShooterGame() {
       if (world.score > highScore) {
         setHighScore(world.score);
         if (typeof window !== 'undefined') {
-          localStorage.setItem('dungeonGameHighScore', world.score.toString());
+          try {
+            localStorage.setItem('dungeonGameHighScore', world.score.toString());
+          } catch {
+            // 存储不可用时仅保留内存中的最高分
+          }
         }
       }
     }
@@ -1856,7 +1873,7 @@ export default function TopDownShooterGame() {
                         desc: t('buffIgniteDesc'),
                       },
                       {
-                        icon: '/assets/poison.png',
+                        icon: '/assets/poison_buff.png',
                         name: t('buffPoisonName'),
                         desc: t('buffPoisonDesc'),
                       },
@@ -2435,7 +2452,7 @@ export default function TopDownShooterGame() {
                   <div className="flex rounded-lg overflow-hidden border border-gray-600">
                     <button
                       onClick={() => {
-                        setLanguage('zh');
+                        switchLanguage('zh');
                         playSound('button_click');
                       }}
                       className={`px-4 py-1.5 text-sm font-bold transition-all ${language === 'zh' ? 'bg-yellow-500 text-black' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
@@ -2444,7 +2461,7 @@ export default function TopDownShooterGame() {
                     </button>
                     <button
                       onClick={() => {
-                        setLanguage('en');
+                        switchLanguage('en');
                         playSound('button_click');
                       }}
                       className={`px-4 py-1.5 text-sm font-bold transition-all ${language === 'en' ? 'bg-yellow-500 text-black' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}

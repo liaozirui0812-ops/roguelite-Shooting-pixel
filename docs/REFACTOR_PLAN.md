@@ -154,19 +154,19 @@ src/components/game/
 
 `AssetWidgets.tsx` 已有同名目录先例（418 行），沿用其 props 风格。这些组件的数据全部来自 `view` 快照 + `t()` 文案 + 上层的 callback，**不应直接 import `GameRuntime`**。
 
-**B1.3 · 输入绑定 → `src/hooks/useGameInput.ts`**
+**B1.3 · 输入绑定 → `src/hooks/useGameInput.ts`** ✅ 已完成（2026-10-19，page.tsx 1324→1157）
 
 搬运 1152–1343 的 5 个 Effect 与 `handleMouseMove` / `handleMouseDown` / `handleClick` / `handleMouseUp` / `handleWheel` / `handleKeyDown` / `handleKeyUp` / `handleWeaponKey`。该 hook 需要 `runtime`、`setters`、几何判定与 Canvas ref。
 
 注意 `handleClick`（1283–1331）内含 Canvas 内暂停按钮的命中判定，坐标依赖 `GAME_CONFIG.CANVAS_WIDTH` 与 rect 换算——搬移时连同 R11 一起复核，但**不要顺手改 Canvas 尺寸合同**。
 
-**B1.4 · 阶段命令 → `src/game/commands/`（新增目录）**
+**B1.4 · 阶段命令 → `src/game/commands/`（新增目录）** ✅ 已完成（2026-10-19，含 startGameWithWeapon；refs 以 RunResetRefs 显式入参；命令链 level←shop←upgrade←completion 单向无循环）
 
 把 `startLevel` / `startGameWithWeapon` / `switchWeapon*` / `applyUpgrade` / 商店四个命令 / `restartGame` / `checkLevelCompletion` 抽成显式传入 `(runtime, setters, deps)` 的纯函数。这是 R19 建议的"随具体工作抽出命令"，不是引入命令总线——保持直接函数调用，不要新增事件接口。
 
 **前置**：`startGameWithWeapon` 依赖 `dashRef` / `dashCooldownStartRef` / `cameraInitRef` / `muzzleFlashesRef` / `recoilRef` / `screenShakeRef` 六个 ref。建议先用 R17 明确"页面 ref 跨局保留表"再搬，否则容易把 ref 摊销合同一起搬错。若不想等，可**最后搬这一个**，其余七个先走。
 
-**B1.5 · 地图生成 → `src/game/map/`**
+**B1.5 · 地图生成 → `src/game/map/`** ✅ 已完成（2026-10-19，buildMapBackground / buildObstacles 纯函数化，调试 console.log 已删，AST 回归改从新模块提取）
 
 `generateMapBackground`（内含调试用 `console.log`，搬迁时顺手删掉）与 `generateObstacles` 都是纯计算 + `setObstacles`，依赖 `obstacleImages` 与 `tileImages`。抽成 `(runtime, images, opts) => Obstacle[]` 形式最干净。
 

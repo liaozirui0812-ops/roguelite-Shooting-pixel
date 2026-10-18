@@ -7,30 +7,45 @@ import {
   checkCollisionWithObstacle,
   GAME_CONFIG,
   WeaponType,
-  applyWeaponStatsToPlayer,
-  getWeaponMagazine,
   Position,
   Player,
   MuzzleFlash,
   Obstacle,
   UpgradeType,
   ShopItem,
-  GROWTH_CHAIN_NODES,
 } from '@/game';
-import { resetRunWorld } from '@/game/runtime/createRun';
 import { createWorld } from '@/game/model/World';
 import { createGameView } from '@/game/model/View';
 import { useGameRuntime, useGameLoop } from '@/hooks/useGameRuntime';
 import { useGameAssets } from '@/hooks/useGameAssets';
 import { useGameInput } from '@/hooks/useGameInput';
-import { buildUpgradeOffers, buildShopOffers } from '@/game/rules/offers';
-import { buyShopOffer } from '@/game/rules/shop';
-import { canCompleteLevel } from '@/game/rules/level';
-import { applyUpgradeEffect } from '@/game/rules/upgradeEffect';
+import { buildShopOffers } from '@/game/rules/offers';
+import { startLevel as startLevelCommand } from '@/game/commands/level';
+import {
+  generateShopItems as generateShopItemsCommand,
+  toggleLockItems as toggleLockItemsCommand,
+  enterShop as enterShopCommand,
+  refreshShop as refreshShopCommand,
+  buyShopItem as buyShopItemCommand,
+  exitShop as exitShopCommand,
+} from '@/game/commands/shop';
+import {
+  selectRandomUpgrades as selectRandomUpgradesCommand,
+  refreshUpgrades as refreshUpgradesCommand,
+  applyUpgrade as applyUpgradeCommand,
+} from '@/game/commands/upgrade';
+import { checkLevelCompletion as checkLevelCompletionCommand } from '@/game/commands/completion';
+import {
+  switchWeapon as switchWeaponCommand,
+  switchWeaponTo as switchWeaponToCommand,
+} from '@/game/commands/weapon';
+import {
+  startGameWithWeapon as startGameWithWeaponCommand,
+  restartGame as restartGameCommand,
+} from '@/game/commands/gameFlow';
 import { explodeWorld } from '@/game/systems/explosion';
 import { buildMapBackground } from '@/game/map/mapBackground';
 import { buildObstacles } from '@/game/map/obstacles';
-import { spawnMonsterWaves } from '@/game/systems/spawnMonsters';
 import { updateWorld } from '@/game/systems/updateWorld';
 import { renderWorld } from '@/game/render/renderWorld';
 import { LightingRenderer } from '@/game/render/lighting/lightingRenderer';
@@ -70,10 +85,6 @@ export default function TopDownShooterGame() {
   // 游戏状态
   const setGameState = runtime.setter('gameState');
   const setShopItems = runtime.setter('shopItems');
-  const setLockedItems = runtime.setter('lockedItems');
-  const setShopRefreshCount = runtime.setter('shopRefreshCount');
-  const setShopRefreshPrice = runtime.setter('shopRefreshPrice');
-  const setUpgradeRefreshCount = runtime.setter('upgradeRefreshCount');
   const setPlayer = runtime.setter('player');
   const setMonsters = runtime.setter('monsters');
   const setPoisonCircles = runtime.setter('poisonCircles'); // 毒圈列表
@@ -91,16 +102,12 @@ export default function TopDownShooterGame() {
   const setPlayerHitParticles = runtime.setter('playerHitParticles'); // 玩家受击蓝色粒子列表
   const setBossBarrages = runtime.setter('bossBarrages'); // BOSS砸地旋转弹幕列表
   const setAccumulatedDamage = runtime.setter('accumulatedDamage');
-  const setLevel = runtime.setter('level');
   const setMonstersRemaining = runtime.setter('monstersRemaining');
-  const setLevelCompletionTriggered = runtime.setter('levelCompletionTriggered'); // 防止关卡完成重复触发
 
   // 分批敌人生成相关状态
   const setPendingMonsterBatches = runtime.setter('pendingMonsterBatches'); // 待生成的敌人批次
   const setCurrentBatchInitialCount = runtime.setter('currentBatchInitialCount'); // 当前批次初始敌人数量
   const setNextBatchTime = runtime.setter('nextBatchTime'); // 下一批生成时间
-  const setTotalMonstersToSpawn = runtime.setter('totalMonstersToSpawn'); // 总共需要生成的敌人数量
-  const setThisLevelWaveTotal = runtime.setter('thisLevelWaveTotal'); // 本关总波次数
   const setWaveTransition = runtime.setter('waveTransition'); // 波次衔接状态（公告+倒计时）
 
   const setBossAlive = runtime.setter('bossAlive'); // BOSS是否存活
@@ -108,7 +115,6 @@ export default function TopDownShooterGame() {
   const setBossMaxHp = runtime.setter('bossMaxHp'); // BOSS最大血量
   const setScore = runtime.setter('score');
   const [highScore, setHighScore] = useState(0); // 最高分数
-  const setAvailableUpgrades = runtime.setter('availableUpgrades');
   const setKeys = runtime.setter('keys');
   const setMousePos = runtime.setter('mousePos');
   const setIsMouseDown = runtime.setter('isMouseDown');
@@ -261,306 +267,84 @@ export default function TopDownShooterGame() {
 
   // 随机选择升级选项（根据关卡动态计算权重和数值）
   const selectRandomUpgrades = useCallback(
-    (weapon: WeaponType, level: number, player: Player) => {
-      setAvailableUpgrades(buildUpgradeOffers(weapon, level, player, runtime.random));
-    },
+    (weapon: WeaponType, level: number, player: Player) =>
+      selectRandomUpgradesCommand(runtime, weapon, level, player),
     [runtime]
   );
 
   // 刷新升级选项（每关固定刷新一次）
-  const refreshUpgrades = useCallback(() => {
-    if (world.upgradeRefreshCount >= 1) {
-      console.warn('已达到本关刷新上限');
-      return;
-    }
-    // 重新生成升级选项
-    selectRandomUpgrades(world.player.weapon, world.level, world.player);
-    setUpgradeRefreshCount(world.upgradeRefreshCount + 1);
-  }, [
-    world.upgradeRefreshCount,
-    world.player.weapon,
-    world.level,
-    world.player,
-    selectRandomUpgrades,
-  ]);
+  const refreshUpgrades = useCallback(() => refreshUpgradesCommand(runtime), [runtime]);
 
-
-  // 生成怪物
-  const spawnMonsters = useCallback(
-    (
-      totalWeight: number,
-      hpMultiplier: number,
-      enemySpeedMultiplier = 1,
-      currentLevel = 1,
-      playerX?: number,
-      playerY?: number
-    ) => {
-      spawnMonsterWaves(
-        runtime,
-        totalWeight,
-        hpMultiplier,
-        enemySpeedMultiplier,
-        currentLevel,
-        playerX,
-        playerY,
-        playSound
-      );
-    },
-    [runtime, playSound]
-  );
 
   // 开始新关卡（支持指定关卡参数）
   const startLevel = useCallback(
-    (targetLevel?: number) => {
-      // 播放关卡开始音效
-      playSound('level_start');
-
-      const actualLevel = targetLevel !== undefined ? targetLevel : world.level;
-      const baseWeight = 3;
-      // 总权重：关卡1=3, 关卡2=4, 关卡3+=7/9/11...
-      let totalWeight = baseWeight + (actualLevel - 1) * 2;
-      if (actualLevel === 2) {
-        totalWeight = 4; // 第二关特殊处理，减少怪物数量
-      }
-      // 血量倍率公式：HP = (1.1 + 0.10 × (L - 3) + 0.035 × (L - 3)²) × 1.25
-      // ×1.25 用于补偿数量下降20%（数量×血量≈恒定，维持每关战斗时长）
-      const levelDiff = actualLevel - 3;
-      const hpMultiplier = (1.1 + 0.1 * levelDiff + 0.035 * levelDiff * levelDiff) * 1.25;
-
-      // 重置关卡完成标记
-      setLevelCompletionTriggered(false);
-
-      // 重置分批生成状态
-      setPendingMonsterBatches([]);
-      setCurrentBatchInitialCount(0);
-      setNextBatchTime(null);
-      setTotalMonstersToSpawn(0);
-      setThisLevelWaveTotal(0);
-      setWaveTransition(null);
-
-      // 重置BOSS状态（如果不是第5关）
-      if (actualLevel !== 5) {
-        setBossAlive(false);
-        setBossCurrentHp(1560);
-        setBossMaxHp(1560);
-      }
-
-      spawnMonsters(
-        totalWeight,
-        hpMultiplier,
-        world.player.enemySpeedMultiplier,
-        actualLevel,
-        world.player.x,
-        world.player.y
-      );
-      // monstersRemaining会在spawnMonsters中设置
-    },
-    [world.level, world.player.enemySpeedMultiplier, spawnMonsters, playSound]
+    (targetLevel?: number) => startLevelCommand(runtime, playSound, targetLevel),
+    [runtime, playSound]
   );
 
   // 开始游戏（选择武器后）
   const startGameWithWeapon = useCallback(
-    (weaponType: WeaponType) => {
-      // 播放按钮点击音效
-      playSound('button_click');
-
-      // 重置闪现技能冷却与位移状态
-      setDashCooldown(0);
-      dashCooldownStartRef.current = 0;
-      dashRef.current = {
-        active: false,
-        startTime: 0,
-        fromX: 0,
-        fromY: 0,
-        dirX: 0,
-        dirY: 0,
-        recoveryStart: 0,
-      };
-      dashPendingRef.current = false;
-
-      // 清除关卡完成的延迟定时器
-      if (levelCompleteTimeoutRef.current) {
-        runtime.cancel(levelCompleteTimeoutRef.current);
-        levelCompleteTimeoutRef.current = undefined;
-      }
-
-      resetRunWorld(runtime, weaponType);
-      cameraInitRef.current = false;
-      generateObstacles();
-      generateMapBackground(); // 重新生成地图背景（随机地块组合）
-      startLevel(1); // 传入关卡参数 1，确保生成第一关的怪物
-      muzzleFlashesRef.current = [];
-      recoilRef.current = { backward: 0, upward: 0, shake: 0 };
-      screenShakeRef.current = 0;
-      setGameState('playing');
-    },
-    [generateObstacles, generateMapBackground, startLevel, playBGM]
+    (weaponType: WeaponType) =>
+      startGameWithWeaponCommand(
+        runtime,
+        weaponType,
+        {
+          dashRef,
+          dashCooldownStartRef,
+          dashPendingRef,
+          cameraInitRef,
+          muzzleFlashesRef,
+          recoilRef,
+          screenShakeRef,
+          levelCompleteTimeoutRef,
+        },
+        {
+          playSound,
+          regenerateMap: () => {
+            generateObstacles();
+            generateMapBackground();
+          },
+        }
+      ),
+    [runtime, playSound, generateObstacles, generateMapBackground]
   );
 
   // 切换武器（支持向前或向后切换）
-  const switchWeapon = useCallback((direction: 'next' | 'prev' = 'next') => {
-    setPlayer((prev) => {
-      if (prev.weapons.length <= 1) return prev; // 只有一个武器时不切换
-      if (prev.isSwitchingWeapon) return prev; // 正在切换武器时不切换
-
-      // 保存当前武器的弹药状态
-      const newWeaponAmmo = { ...prev.weaponAmmo, [prev.weapon]: prev.currentAmmo };
-
-      // 计算下一个武器索引
-      let nextIndex: number;
-      if (direction === 'next') {
-        nextIndex = (prev.currentWeaponIndex + 1) % prev.weapons.length;
-      } else {
-        nextIndex = (prev.currentWeaponIndex - 1 + prev.weapons.length) % prev.weapons.length;
-      }
-      const nextWeapon = prev.weapons[nextIndex];
-
-      // 获取该武器的弹药（如果没有记录则满弹匣，弹匣容量包含该武器的随机弹容量加成）
-      const magCapacity = getWeaponMagazine(prev, nextWeapon);
-      const savedAmmo = newWeaponAmmo[nextWeapon] ?? magCapacity;
-
-      return {
-        ...applyWeaponStatsToPlayer(prev, nextWeapon),
-        weapon: nextWeapon,
-        currentWeaponIndex: nextIndex,
-        weaponAmmo: newWeaponAmmo,
-        currentAmmo: savedAmmo,
-        isReloading: false,
-        reloadStartTime: 0,
-        reloadInterrupted: false,
-        // 设置武器切换状态
-        isSwitchingWeapon: true,
-        weaponSwitchStartTime: runtime.now(),
-      };
-    });
-  }, []);
+  const switchWeapon = useCallback(
+    (direction: 'next' | 'prev' = 'next') => switchWeaponCommand(runtime, direction),
+    [runtime]
+  );
 
   // 切换到指定索引的武器（数字键快捷切换）
-  const switchWeaponTo = useCallback((index: number) => {
-    setPlayer((prev) => {
-      if (prev.weapons.length <= 1) return prev; // 只有一把武器时不切换
-      if (prev.isSwitchingWeapon) return prev; // 切换动画中不响应
-      if (index < 0 || index >= prev.weapons.length) return prev; // 索引越界
-      if (index === prev.currentWeaponIndex) return prev; // 切到当前武器无效果
-
-      // 保存当前武器的弹药状态
-      const newWeaponAmmo = { ...prev.weaponAmmo, [prev.weapon]: prev.currentAmmo };
-      const nextWeapon = prev.weapons[index];
-
-      // 获取目标武器的弹药（无记录则满弹匣，弹匣容量包含该武器随机弹容量加成）
-      const magCapacity = getWeaponMagazine(prev, nextWeapon);
-      const savedAmmo = newWeaponAmmo[nextWeapon] ?? magCapacity;
-
-      return {
-        ...applyWeaponStatsToPlayer(prev, nextWeapon),
-        weapon: nextWeapon,
-        currentWeaponIndex: index,
-        weaponAmmo: newWeaponAmmo,
-        currentAmmo: savedAmmo,
-        isReloading: false,
-        reloadStartTime: 0,
-        reloadInterrupted: false,
-        isSwitchingWeapon: true,
-        weaponSwitchStartTime: runtime.now(),
-      };
-    });
-  }, []);
+  const switchWeaponTo = useCallback(
+    (index: number) => switchWeaponToCommand(runtime, index),
+    [runtime]
+  );
 
   // 应用升级
-  const applyUpgrade = (upgradeId: UpgradeType) => {
-    if (world.gameState !== 'upgrade') return;
-    // 播放按钮点击音效
-    playSound('button_click');
-
-    // 从 availableUpgrades 中找到对应的升级，获取其数值
-    const upgrade = world.availableUpgrades.find((u) => u.id === upgradeId);
-    if (!upgrade) return;
-
-    // 检查是否是成长链节点升级
-    if (upgrade.growthChainNode) {
-      setPlayer((prev) => {
-        const node = GROWTH_CHAIN_NODES[upgrade.growthChainNode!];
-        return node.apply(prev);
-      });
-      // 进入商店而不是直接开始下一关
-      enterShop();
-      return;
-    }
-
-    const value = upgrade.value;
-
-    setPlayer((prev) => applyUpgradeEffect(prev, upgradeId, value, runtime.random));
-    // 进入商店而不是直接开始下一关
-    enterShop();
-  };
+  const applyUpgrade = (upgradeId: UpgradeType) =>
+    applyUpgradeCommand(runtime, upgradeId, playSound);
 
   // 生成商店商品
-  const generateShopItems = useCallback(() => {
-    setShopItems(
-      buildShopOffers(world.player, world.level, world.lockedItems, runtime.random, () =>
-        runtime.nextId('shop')
-      )
-    );
-  }, [runtime]);
+  const generateShopItems = useCallback(() => generateShopItemsCommand(runtime), [runtime]);
 
   // 锁定/解锁当前商品
-  const toggleLockItems = useCallback(() => {
-    if (world.lockedItems.length === 0) {
-      // 锁定当前商品
-      setLockedItems(world.shopItems.map((item) => ({ ...item })));
-    } else {
-      // 解锁商品
-      setLockedItems([]);
-    }
-  }, [world.shopItems, world.lockedItems]);
+  const toggleLockItems = useCallback(() => toggleLockItemsCommand(runtime), [runtime]);
 
   // 进入商店
-  const enterShop = useCallback(() => {
-    setShopRefreshCount(0);
-    // 计算首次刷新价格
-    const firstRefreshPrice = 5 + Math.floor(world.level / 2);
-    setShopRefreshPrice(firstRefreshPrice);
-    generateShopItems();
-    setGameState('shop');
-  }, [world.level, generateShopItems]);
+  const enterShop = useCallback(() => enterShopCommand(runtime), [runtime]);
 
   // 刷新商店商品
-  const refreshShop = useCallback(() => {
-    if (world.gameState !== 'shop') return;
-    if (world.player.gold < world.shopRefreshPrice) return;
-
-    setPlayer((prev) => ({ ...prev, gold: prev.gold - world.shopRefreshPrice }));
-
-    const newRefreshCount = world.shopRefreshCount + 1;
-    setShopRefreshCount(newRefreshCount);
-
-    // 计算新的刷新价格
-    const newRefreshPrice = Math.floor(world.shopRefreshPrice * 1.2);
-    setShopRefreshPrice(newRefreshPrice);
-
-    generateShopItems();
-  }, [world.player.gold, world.shopRefreshPrice, world.shopRefreshCount, generateShopItems]);
+  const refreshShop = useCallback(() => refreshShopCommand(runtime), [runtime]);
 
   // 购买商品
   const buyShopItem = useCallback(
-    (item: ShopItem) => {
-      if (buyShopOffer(runtime, item.id)) playSound('coin');
-    },
+    (item: ShopItem) => buyShopItemCommand(runtime, item, playSound),
     [runtime, playSound]
   );
 
   // 退出商店
-  const exitShop = useCallback(() => {
-    if (world.gameState !== 'shop') return;
-    // 不要清空锁定列表，让锁定商品跨关卡保留
-    // setLockedItems([]);  // 注释掉这一行
-    runtime.transaction(() => {
-      const nextLevel = world.level + 1;
-      setLevel(nextLevel);
-      startLevel(nextLevel);
-      setGameState('playing');
-    });
-  }, [startLevel, runtime]);
+  const exitShop = useCallback(() => exitShopCommand(runtime, playSound), [runtime, playSound]);
 
   // Refill through the same candidate/price rules, preserving all unbought offers.
   useEffect(() => {
@@ -583,9 +367,7 @@ export default function TopDownShooterGame() {
   }, [world.isPaused]);
 
   // 重新开始
-  const restartGame = () => {
-    setGameState('weaponSelect');
-  };
+  const restartGame = () => restartGameCommand(runtime);
 
   // 碰撞检测
   const checkCollision = (pos1: Position, pos2: Position, size1: number, size2: number) => {
@@ -659,34 +441,8 @@ export default function TopDownShooterGame() {
   };
 
   // 游戏主循环
-  const checkLevelCompletion = () => {
-    if (canCompleteLevel(world)) {
-      // 标记关卡完成已触发
-      setLevelCompletionTriggered(true);
-
-      // 清除之前的延迟定时器
-      if (levelCompleteTimeoutRef.current) {
-        runtime.cancel(levelCompleteTimeoutRef.current);
-      }
-
-      // 延迟2秒后显示升级界面
-      levelCompleteTimeoutRef.current = runtime.schedule(() => {
-        // 使用 ref 获取最新的玩家状态
-        const currentPlayer = world.player;
-        if (currentPlayer) {
-          selectRandomUpgrades(currentPlayer.weapon, world.level, currentPlayer);
-          setGameState('upgrade');
-          setUpgradeRefreshCount(0); // 重置刷新次数
-
-          // 停止背景音乐
-          stopBGM();
-
-          // 播放关卡完成音效
-          playSound('level_complete');
-        }
-      }, 2000);
-    }
-  };
+  const checkLevelCompletion = () =>
+    checkLevelCompletionCommand(runtime, { playSound, stopBGM, levelCompleteTimeoutRef });
 
   const simulationContext = {
     canvasRef,

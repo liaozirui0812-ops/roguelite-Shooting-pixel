@@ -129,7 +129,9 @@ pnpm lint:build
 
 注意保留现有语义：`required: false` 的地块允许部分失败并回退纯色（当前代码 `:374` 注释已明确），失败列表才决定 `isLoading`。
 
-**B1.2 · JSX 界面 → `src/components/game/`**
+**B1.2 · JSX 界面 → `src/components/game/`** ✅ 已完成（2026-10-19）
+
+13 个区块已按下列对应关系机械抽取（组件体零改动，门控条件保留在 page.tsx 使用点，props 名与原标识符一致）。page.tsx 2361 → 1324 行。验证：tsc 0 / lint 0 / 回归 49 / check:assets 绿。`next build` 因执行环境的删改保护无法运行，需本地复核一次。
 
 与现有 13 个注释区块一一对应，**不要重新设计 UI 结构**：
 

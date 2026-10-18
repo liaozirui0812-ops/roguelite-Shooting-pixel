@@ -27,8 +27,7 @@ import { resetRunWorld } from '@/game/runtime/createRun';
 import { createWorld } from '@/game/model/World';
 import { createGameView } from '@/game/model/View';
 import { useGameRuntime, useGameLoop } from '@/hooks/useGameRuntime';
-import { ASSET_PATHS } from '@/game/assets/manifest';
-import { loadImageAsset, type AssetSpec } from '@/game/assets/loader';
+import { useGameAssets } from '@/hooks/useGameAssets';
 import { buildUpgradeOffers, buildShopOffers } from '@/game/rules/offers';
 import { buyShopOffer } from '@/game/rules/shop';
 import { canCompleteLevel } from '@/game/rules/level';
@@ -114,10 +113,10 @@ export default function TopDownShooterGame() {
   const [showInfoPopup, setShowInfoPopup] = useState(false); // 显示信息弹窗
   const [showSettings, setShowSettings] = useState(false); // 显示设置弹窗
   const [showBuffPreview, setShowBuffPreview] = useState(false); // 显示buff预览弹窗
-  const [coinImage, setCoinImage] = useState<HTMLImageElement | null>(null);
-  const [resourceErrors, setResourceErrors] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // 资源是否加载完成
-  const [loadProgress, setLoadProgress] = useState(0); // 加载进度 0-100
+
+  // 资源装配（图片加载、地块/障碍分组、失败重试）
+  const { assets, tileImages, obstacleImages, resourceErrors, isLoading, loadProgress, retryLoad } =
+    useGameAssets();
 
   // 语言切换（用 ref 让 canvas 闭包与 JSX 都读取最新语言）
   const [language, setLanguage] = useState<Language>(() => loadLanguage());
@@ -134,22 +133,7 @@ export default function TopDownShooterGame() {
     }
   }, []);
 
-  // 加载美术素材图片
-  const [bulletImage, setBulletImage] = useState<HTMLImageElement | null>(null);
-  const [rocketImage, setRocketImage] = useState<HTMLImageElement | null>(null); // 火箭弹图片
-  const [playerIdleImage, setPlayerIdleImage] = useState<HTMLImageElement | null>(null); // 玩家待机动画
-  const [playerWalkImage, setPlayerWalkImage] = useState<HTMLImageElement | null>(null); // 玩家走动动画
-  const [playerDashImage, setPlayerDashImage] = useState<HTMLImageElement | null>(null); // 玩家闪现动画
-  const [smokeImage, setSmokeImage] = useState<HTMLImageElement | null>(null); // 烟雾图片
-  const [skillIconImage, setSkillIconImage] = useState<HTMLImageElement | null>(null); // 闪现技能图标 (shanxian.png)
-  const [pistolImage, setPistolImage] = useState<HTMLImageElement | null>(null);
-  const [shotgunImage, setShotgunImage] = useState<HTMLImageElement | null>(null);
-  const [smgImage, setSmgImage] = useState<HTMLImageElement | null>(null);
-  const [sniperImage, setSniperImage] = useState<HTMLImageElement | null>(null);
-  const [fireImage, setFireImage] = useState<HTMLImageElement | null>(null);
-  const [bossImage, setBossImage] = useState<HTMLImageElement | null>(null);
-  const [boss2Image, setBoss2Image] = useState<HTMLImageElement | null>(null); // BOSS跳跃动画
-  const [bossFireBallImage, setBossFireBallImage] = useState<HTMLImageElement | null>(null); // BOSS火球序列帧
+  // 加载美术素材图片（state 已由 useGameAssets 托管，此处仅保留与渲染无关的本地常量与 ref）
   const DASH_COOLDOWN_MS = 5000;
   const NORMAL_MOVE_PPM = 0.017; // 玩家正常移速（px/ms），作为闪现曲线末速约束
   const dashRef = useRef<{
@@ -178,43 +162,9 @@ export default function TopDownShooterGame() {
   const cameraInitRef = useRef(false); // 相机是否已初始化对齐
   const dashPendingRef = useRef(false); // 玩家闪现技能
   const baseTransformRef = useRef<DOMMatrix | null>(null); // 屏幕基准变换（用于 HUD 脱离摄像机）
-  const [rangeImage, setRangeImage] = useState<HTMLImageElement | null>(null); // 锁定范围图标
-  const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
-  const [enemy_1Image, setEnemy_1Image] = useState<HTMLImageElement | null>(null);
-  const [enemy_2Image, setEnemy_2Image] = useState<HTMLImageElement | null>(null);
-  const [enemy_3Image, setEnemy_3Image] = useState<HTMLImageElement | null>(null);
-  const [enemy_4_1Image, setEnemy_4_1Image] = useState<HTMLImageElement | null>(null); // 敌人4_1（不射击动画）
-  const [enemy_4_2Image, setEnemy_4_2Image] = useState<HTMLImageElement | null>(null); // 敌人4_2（射击动画）
-  const [arrowImage, setArrowImage] = useState<HTMLImageElement | null>(null); // 箭头指示器
-  const [pauseImage, setPauseImage] = useState<HTMLImageElement | null>(null); // 暂停按钮
-  const [startImage, setStartImage] = useState<HTMLImageElement | null>(null); // 开始按钮
-  const [chestImage, setChestImage] = useState<HTMLImageElement | null>(null); // 宝箱图片
-  const [ballImage, setBallImage] = useState<HTMLImageElement | null>(null); // 子弹图片
-  const [pistolShowImage, setPistolShowImage] = useState<HTMLImageElement | null>(null); // 手枪展示图
-  const [shotgunShowImage, setShotgunShowImage] = useState<HTMLImageElement | null>(null); // 散弹枪展示图
-  const [smgShowImage, setSmgShowImage] = useState<HTMLImageElement | null>(null); // 冲锋枪展示图
-  const [sniperShowImage, setSniperShowImage] = useState<HTMLImageElement | null>(null); // 狙击枪展示图
-  const [rpgImage, setRpgImage] = useState<HTMLImageElement | null>(null); // 火箭筒战斗图片
-  const [rpgShowImage, setRpgShowImage] = useState<HTMLImageElement | null>(null); // 火箭筒展示图
-  const [boomImage, setBoomImage] = useState<HTMLImageElement | null>(null); // 爆炸序列帧图片
-  const [hpGreenImage, setHpGreenImage] = useState<HTMLImageElement | null>(null); // 血量格子-绿色
-  const [hpYellowImage, setHpYellowImage] = useState<HTMLImageElement | null>(null); // 血量格子-黄色
-  const [hpRedImage, setHpRedImage] = useState<HTMLImageElement | null>(null); // 血量格子-红色
-  const [hpBarImage, setHpBarImage] = useState<HTMLImageElement | null>(null); // 血量条底图
-  const [weaponUpgradeBoxImage, setWeaponUpgradeBoxImage] = useState<HTMLImageElement | null>(null); // 武器属性加成箱
-  const [healthPotionImage, setHealthPotionImage] = useState<HTMLImageElement | null>(null); // 治疗瓶
-
-  // 障碍物图片
-  const [obstacleImages, setObstacleImages] = useState<Record<string, HTMLImageElement>>({});
-
-  // 地块图片（用于地图地面平铺）
-  const [tileImages, setTileImages] = useState<HTMLImageElement[]>([]);
 
   // 地图背景canvas（预先渲染的地图背景）
   const mapBackgroundCanvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  // 图片加载版本号，用于强制重新加载图片
-  const [imageVersion, setImageVersion] = useState(15); // 从15开始，确保重新加载
 
   // 使用 ref 存储枪火动画和后坐力，避免频繁 setState 导致卡顿
   const muzzleFlashesRef = useRef<MuzzleFlash[]>([]);
@@ -270,130 +220,6 @@ export default function TopDownShooterGame() {
       }
     }
   }, [world.gameState, world.score, highScore]);
-
-  // 加载所有游戏美术素材
-  useEffect(() => {
-    // 定义所有需要加载的资源
-    const resources: AssetSpec[] = [
-      // 金币图片
-      { key: 'coin', src: ASSET_PATHS.coin, setter: setCoinImage },
-      // 子弹图片
-      { key: 'bullet', src: ASSET_PATHS.bullet, setter: setBulletImage },
-      // 烟雾图片
-      { key: 'smoke', src: ASSET_PATHS.smoke, setter: setSmokeImage },
-      // 枪械图片
-      { key: 'pistol', src: ASSET_PATHS.pistol, setter: setPistolImage },
-      { key: 'shotgun', src: ASSET_PATHS.shotgun, setter: setShotgunImage },
-      { key: 'smg', src: ASSET_PATHS.smg, setter: setSmgImage },
-      { key: 'sniper', src: ASSET_PATHS.sniper, setter: setSniperImage },
-      // 枪火精灵表
-      { key: 'fire', src: ASSET_PATHS.fire, setter: setFireImage },
-      // BOSS精灵表
-      { key: 'boss', src: ASSET_PATHS.boss, setter: setBossImage },
-      { key: 'boss2', src: ASSET_PATHS.boss2, setter: setBoss2Image },
-      // BOSS火球序列帧
-      { key: 'bossFireBall', src: ASSET_PATHS.bossFireBall, setter: setBossFireBallImage },
-      // 锁定范围图标
-      { key: 'range', src: ASSET_PATHS.range, setter: setRangeImage },
-      // 敌人精灵表
-      { key: 'enemy_1', src: ASSET_PATHS.enemy_1, setter: setEnemy_1Image },
-      { key: 'enemy_2', src: ASSET_PATHS.enemy_2, setter: setEnemy_2Image },
-      { key: 'enemy_3', src: ASSET_PATHS.enemy_3, setter: setEnemy_3Image },
-      { key: 'enemy_4_1', src: ASSET_PATHS.enemy_4_1, setter: setEnemy_4_1Image },
-      { key: 'enemy_4_2', src: ASSET_PATHS.enemy_4_2, setter: setEnemy_4_2Image },
-      // 箭头指示器图片
-      { key: 'arrow', src: ASSET_PATHS.arrow, setter: setArrowImage },
-      // 暂停按钮图片
-      { key: 'pause', src: ASSET_PATHS.pause, setter: setPauseImage },
-      // 开始按钮图片
-      { key: 'start', src: ASSET_PATHS.start, setter: setStartImage },
-      // 宝箱图片
-      { key: 'chest', src: ASSET_PATHS.chest, setter: setChestImage },
-      // 子弹图片（敌人子弹）
-      { key: 'ball', src: ASSET_PATHS.ball, setter: setBallImage },
-      // 武器展示图片
-      { key: 'pistolShow', src: ASSET_PATHS.pistolShow, setter: setPistolShowImage },
-      { key: 'shotgunShow', src: ASSET_PATHS.shotgunShow, setter: setShotgunShowImage },
-      { key: 'smgShow', src: ASSET_PATHS.smgShow, setter: setSmgShowImage },
-      { key: 'sniperShow', src: ASSET_PATHS.sniperShow, setter: setSniperShowImage },
-      // 火箭筒相关图片
-      { key: 'rpg', src: ASSET_PATHS.rpg, setter: setRpgImage },
-      { key: 'rpgShow', src: ASSET_PATHS.rpgShow, setter: setRpgShowImage },
-      // 爆炸序列帧图片
-      { key: 'boom', src: ASSET_PATHS.boom, setter: setBoomImage },
-      // 血量格子图片
-      { key: 'hpGreen', src: ASSET_PATHS.hpGreen, setter: setHpGreenImage },
-      { key: 'hpYellow', src: ASSET_PATHS.hpYellow, setter: setHpYellowImage },
-      { key: 'hpRed', src: ASSET_PATHS.hpRed, setter: setHpRedImage },
-      // 血量条底图
-      { key: 'hpBar', src: ASSET_PATHS.hpBar, setter: setHpBarImage },
-      // 武器属性加成箱
-      {
-        key: 'weaponUpgradeBox',
-        src: ASSET_PATHS.weaponUpgradeBox,
-        setter: setWeaponUpgradeBoxImage,
-      },
-      // 治疗瓶
-      { key: 'healthPotion', src: ASSET_PATHS.healthPotion, setter: setHealthPotionImage },
-      // 障碍物图片
-      { key: 'obstacle_1', src: ASSET_PATHS.obstacle_1, type: 'obstacle' },
-      { key: 'obstacle_2', src: ASSET_PATHS.obstacle_2, type: 'obstacle' },
-      { key: 'obstacle_3', src: ASSET_PATHS.obstacle_3, type: 'obstacle' },
-      { key: 'obstacle_4', src: ASSET_PATHS.obstacle_4, type: 'obstacle' },
-      { key: 'obstacle_5', src: ASSET_PATHS.obstacle_5, type: 'obstacle' },
-      // 火箭弹图片
-      { key: 'rocket', src: ASSET_PATHS.rocket, setter: setRocketImage },
-      // 玩家图片
-      { key: 'playerIdle', src: ASSET_PATHS.playerIdle, setter: setPlayerIdleImage },
-      { key: 'playerWalk', src: ASSET_PATHS.playerWalk, setter: setPlayerWalkImage },
-      { key: 'playerDash', src: ASSET_PATHS.playerDash, setter: setPlayerDashImage },
-      { key: 'skillIcon', src: ASSET_PATHS.skillIcon, setter: setSkillIconImage },
-      // 背景图片
-      { key: 'bg', src: ASSET_PATHS.bg, setter: setBgImage },
-      // 地块图片
-      { key: 'tile1', src: ASSET_PATHS.tile1, type: 'tile', required: false },
-      { key: 'tile2', src: ASSET_PATHS.tile2, type: 'tile', required: false },
-      { key: 'tile3', src: ASSET_PATHS.tile3, type: 'tile', required: false },
-      { key: 'tile4', src: ASSET_PATHS.tile4, type: 'tile', required: false },
-      { key: 'tile5', src: ASSET_PATHS.tile5, type: 'tile', required: false },
-    ];
-
-    const controller = new AbortController();
-    setIsLoading(true);
-    setLoadProgress(0);
-    setResourceErrors([]);
-    let completed = 0;
-    const load = async () => {
-      const results = await Promise.all(
-        resources.map(async (resource) => {
-          const result = await loadImageAsset(resource, controller.signal, imageVersion);
-          if (!controller.signal.aborted) {
-            completed++;
-            setLoadProgress(Math.round((completed / resources.length) * 100));
-            if (result.status === 'loaded') resource.setter?.(result.image);
-          }
-          return { resource, result };
-        })
-      );
-      if (controller.signal.aborted) return;
-      const byPath: Record<string, HTMLImageElement> = {};
-      const loadedTiles: HTMLImageElement[] = [];
-      const failed: string[] = [];
-      for (const { resource, result } of results) {
-        if (result.status === 'loaded' && resource.type === 'obstacle')
-          byPath[resource.src] = result.image;
-        if (result.status === 'loaded' && resource.type === 'tile') loadedTiles.push(result.image);
-        if (result.status === 'failed' && resource.required !== false) failed.push(resource.key);
-      }
-      setObstacleImages(byPath);
-      setResourceErrors(failed);
-      setIsLoading(failed.length > 0);
-      // Promise.all 保留声明顺序；部分缺图时仍使用可用地块，全部失败则回退纯色。
-      setTileImages(loadedTiles);
-    };
-    void load();
-    return () => controller.abort();
-  }, [imageVersion]);
 
   // 生成地图背景（地块平铺）
   const generateMapBackground = useCallback(() => {
@@ -477,32 +303,23 @@ export default function TopDownShooterGame() {
     generateMapBackground();
   }, [tileImages, generateMapBackground]);
 
-  // 延迟更新图片版本，强制重新加载图片
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setImageVersion((prev) => prev + 1);
-    }, 1000); // 1秒后更新版本号
-
-    return () => clearTimeout(timer);
-  }, []);
-
   // 获取当前武器的图片
   const getWeaponImage = useCallback(() => {
     switch (world.player.weapon) {
       case 'pistol':
-        return pistolImage;
+        return assets.pistol ?? null;
       case 'shotgun':
-        return shotgunImage;
+        return assets.shotgun ?? null;
       case 'smg':
-        return smgImage;
+        return assets.smg ?? null;
       case 'sniper':
-        return sniperImage;
+        return assets.sniper ?? null;
       case 'rpg':
-        return rpgImage;
+        return assets.rpg ?? null;
       default:
-        return pistolImage;
+        return assets.pistol ?? null;
     }
-  }, [world.player.weapon, pistolImage, shotgunImage, smgImage, sniperImage, rpgImage]);
+  }, [world.player.weapon, assets]);
 
   // 随机选择升级选项（根据关卡动态计算权重和数值）
   const selectRandomUpgrades = useCallback(
@@ -1009,7 +826,7 @@ export default function TopDownShooterGame() {
     hasAPShot = false
   ) => {
     explodeWorld(
-      { runtime, world, playSound, triggerScreenShake, triggerVampireHeal, boomImage },
+      { runtime, world, playSound, triggerScreenShake, triggerVampireHeal, boomImage: assets.boom ?? null },
       x,
       y,
       radius,
@@ -1085,7 +902,7 @@ export default function TopDownShooterGame() {
     setPierceEffects,
     setGameState,
     triggerScreenShake,
-    boomImage,
+    boomImage: assets.boom ?? null,
     setExplosionEffects,
     setAffixExplosionParticles,
     setPoisonCircles,
@@ -1114,40 +931,40 @@ export default function TopDownShooterGame() {
     baseTransformRef,
     mapBackgroundCanvasRef,
     obstacleImages,
-    rocketImage,
-    bulletImage,
-    bossFireBallImage,
-    ballImage,
-    rangeImage,
-    bossImage,
-    boss2Image,
-    enemy_1Image,
-    enemy_2Image,
-    enemy_3Image,
-    enemy_4_2Image,
-    enemy_4_1Image,
-    chestImage,
-    weaponUpgradeBoxImage,
-    healthPotionImage,
-    coinImage,
-    boomImage,
+    rocketImage: assets.rocket ?? null,
+    bulletImage: assets.bullet ?? null,
+    bossFireBallImage: assets.bossFireBall ?? null,
+    ballImage: assets.ball ?? null,
+    rangeImage: assets.range ?? null,
+    bossImage: assets.boss ?? null,
+    boss2Image: assets.boss2 ?? null,
+    enemy_1Image: assets.enemy_1 ?? null,
+    enemy_2Image: assets.enemy_2 ?? null,
+    enemy_3Image: assets.enemy_3 ?? null,
+    enemy_4_2Image: assets.enemy_4_2 ?? null,
+    enemy_4_1Image: assets.enemy_4_1 ?? null,
+    chestImage: assets.chest ?? null,
+    weaponUpgradeBoxImage: assets.weaponUpgradeBox ?? null,
+    healthPotionImage: assets.healthPotion ?? null,
+    coinImage: assets.coin ?? null,
+    boomImage: assets.boom ?? null,
     DASH_COOLDOWN_MS,
-    skillIconImage,
-    smokeImage,
-    playerWalkImage,
-    playerIdleImage,
+    skillIconImage: assets.skillIcon ?? null,
+    smokeImage: assets.smoke ?? null,
+    playerWalkImage: assets.playerWalk ?? null,
+    playerIdleImage: assets.playerIdle ?? null,
     dashRef,
-    playerDashImage,
+    playerDashImage: assets.playerDash ?? null,
     getWeaponImage,
     recoilRef,
-    fireImage,
+    fireImage: assets.fire ?? null,
     muzzleFlashesRef,
-    pauseImage,
-    arrowImage,
-    hpBarImage,
-    hpGreenImage,
-    hpYellowImage,
-    hpRedImage,
+    pauseImage: assets.pause ?? null,
+    arrowImage: assets.arrow ?? null,
+    hpBarImage: assets.hpBar ?? null,
+    hpGreenImage: assets.hpGreen ?? null,
+    hpYellowImage: assets.hpYellow ?? null,
+    hpRedImage: assets.hpRed ?? null,
     canvasRef,
   };
   const clearInput = () =>
@@ -1343,7 +1160,7 @@ export default function TopDownShooterGame() {
     }
 
     // 检查是否点击了暂停按钮（只在游戏未暂停时响应）
-    if (!world.isPaused && pauseImage) {
+    if (!world.isPaused && assets.pause) {
       const buttonSize = 40;
       const buttonX = (GAME_CONFIG.CANVAS_WIDTH - buttonSize) / 2;
       const buttonY = 10;
@@ -1411,7 +1228,7 @@ export default function TopDownShooterGame() {
               {resourceErrors.length > 0 && (
                 <div role="alert" className="mt-4 text-center text-red-300">
                   <p>{t('assetLoadFailed')}</p>
-                  <Button className="mt-2" onClick={() => setImageVersion((v) => v + 1)}>
+                  <Button className="mt-2" onClick={retryLoad}>
                     {t('retryLoad')}
                   </Button>
                 </div>

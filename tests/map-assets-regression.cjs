@@ -6,19 +6,26 @@ const ts = require('typescript');
 const { ASSET_PATHS } = require('../src/game/assets/manifest.ts');
 const { GAME_CONFIG } = require('../src/game/config/base.ts');
 
-// Execute the real page callbacks with fake I/O, without a second map implementation.
-const source = fs.readFileSync(path.join(__dirname, '../src/app/page.tsx'), 'utf8');
-const ast = ts.createSourceFile('page.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+// Execute the real page/hook callbacks with fake I/O, without a second map implementation.
+// B1.1 后资源装配在 useGameAssets，地图拼接仍在 page.tsx，两个回调分别从各自文件提取。
+const loadSource = fs.readFileSync(path.join(__dirname, '../src/hooks/useGameAssets.ts'), 'utf8');
+const pageSource = fs.readFileSync(path.join(__dirname, '../src/app/page.tsx'), 'utf8');
+const loadAst = ts.createSourceFile('useGameAssets.ts', loadSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const pageAst = ts.createSourceFile('page.tsx', pageSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 let loadEffect, generateMap;
-const visit = node => {
-  if (ts.isCallExpression(node) && node.expression.getText(ast) === 'useEffect' &&
-      node.arguments[0]?.getText(ast).includes('const resources: AssetSpec[]')) loadEffect = node.arguments[0];
-  if (ts.isVariableDeclaration(node) && node.name.getText(ast) === 'generateMapBackground')
-    generateMap = node.initializer.arguments[0];
-  ts.forEachChild(node, visit);
+const visitLoad = node => {
+  if (ts.isCallExpression(node) && node.expression.getText(loadAst) === 'useEffect' &&
+      node.arguments[0]?.getText(loadAst).includes('const resources: AssetSpec[]')) loadEffect = node.arguments[0];
+  ts.forEachChild(node, visitLoad);
 };
-visit(ast);
-function execute(callback, scope) {
+visitLoad(loadAst);
+const visitPage = node => {
+  if (ts.isVariableDeclaration(node) && node.name.getText(pageAst) === 'generateMapBackground')
+    generateMap = node.initializer.arguments[0];
+  ts.forEachChild(node, visitPage);
+};
+visitPage(pageAst);
+function execute(callback, ast, scope) {
   assert.ok(callback, 'page callback exists');
   const code = ts.transpileModule(`const run = ${callback.getText(ast)};`, {
     compilerOptions: { target: ts.ScriptTarget.ES2020 },
@@ -37,7 +44,7 @@ async function loadAssets(failedTiles = []) {
     ts.forEachChild(node, findSetters);
   };
   findSetters(loadEffect);
-  const cleanup = execute(loadEffect, scope);
+  const cleanup = execute(loadEffect, loadAst, scope);
   // Complete in reverse order to exercise cached/asynchronous image loads.
   for (const { resource, resolve } of requests.slice().reverse()) resolve(
     failedTiles.includes(resource.key)
@@ -68,7 +75,7 @@ test('missing decorative tiles do not block startup and use remaining tiles or t
   assert.deepEqual(missing.setResourceErrors, []);
   assert.equal(missing.setIsLoading, false);
   const background = { current: { old: true } };
-  execute(generateMap, { tileImages: [], mapBackgroundCanvasRef: background });
+  execute(generateMap, pageAst, { tileImages: [], mapBackgroundCanvasRef: background });
   assert.equal(background.current, null, 'failed reload clears a stale map cache');
 });
 
@@ -78,7 +85,7 @@ test('the page stitcher covers the world at the original scale, caches it and ac
     const draws = [], fills = [], background = { current: null };
     const context = { drawImage: (...args) => draws.push(args), fillRect: (...args) => fills.push(args), save() {}, restore() {} };
     const canvas = { getContext: () => context };
-    execute(generateMap, {
+    execute(generateMap, pageAst, {
       tileImages: tiles, mapBackgroundCanvasRef: background, GAME_CONFIG,
       document: { createElement: () => canvas }, console: { log() {} },
       // A visual background must not consume a seeded battle random source.

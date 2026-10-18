@@ -28,6 +28,8 @@ import { buyShopOffer } from '@/game/rules/shop';
 import { canCompleteLevel } from '@/game/rules/level';
 import { applyUpgradeEffect } from '@/game/rules/upgradeEffect';
 import { explodeWorld } from '@/game/systems/explosion';
+import { buildMapBackground } from '@/game/map/mapBackground';
+import { buildObstacles } from '@/game/map/obstacles';
 import { spawnMonsterWaves } from '@/game/systems/spawnMonsters';
 import { updateWorld } from '@/game/systems/updateWorld';
 import { renderWorld } from '@/game/render/renderWorld';
@@ -224,80 +226,15 @@ export default function TopDownShooterGame() {
 
   // 生成地图背景（地块平铺）
   const generateMapBackground = useCallback(() => {
-    if (tileImages.length === 0) {
-      mapBackgroundCanvasRef.current = null;
-      return;
-    }
-
-    // 检查所有地块的尺寸，确保它们一致
-    console.log('Checking tile dimensions:');
-    tileImages.forEach((img, index) => {
-      console.log(`  tile${index + 1}: ${img.width}x${img.height}px`);
-    });
-
-    // 获取第一个地块的尺寸
-    const firstTile = tileImages[0];
-    const tileWidth = firstTile.width;
-    const tileHeight = firstTile.height;
-
-    // 创建一个与地图尺寸相同的canvas
-    const canvas = document.createElement('canvas');
-    canvas.width = GAME_CONFIG.WORLD_WIDTH;
-    canvas.height = GAME_CONFIG.WORLD_HEIGHT;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // 计算需要覆盖整个地图的地块行列数
-    // 地块缩小为原来的1/6，所以行列数增加为原来的6倍
-    const tilesX = Math.ceil(GAME_CONFIG.WORLD_WIDTH / (tileWidth / 6));
-    const tilesY = Math.ceil(GAME_CONFIG.WORLD_HEIGHT / (tileHeight / 6));
-
-    console.log(
-      `Tiling: ${tilesX} columns x ${tilesY} rows (original tile: ${tileWidth}x${tileHeight}, scaled: ${Math.floor(tileWidth / 6)}x${Math.floor(tileHeight / 6)})`
-    );
-
-    // 随机平铺地块（缩小为原来的1/6）
-    const scaledTileWidth = tileWidth / 6;
-    const scaledTileHeight = tileHeight / 6;
-
-    for (let y = 0; y < tilesY; y++) {
-      for (let x = 0; x < tilesX; x++) {
-        // 随机选择一个地块图片
-        // 地面花纹仅影响表现，不消耗局内规则的随机源。
-        const tileIndex = Math.floor(Math.random() * tileImages.length);
-        const tileImage = tileImages[tileIndex];
-
-        if (tileImage) {
-          // 绘制时使用缩小后的尺寸，保持长宽比例
-          ctx.drawImage(
-            tileImage,
-            x * scaledTileWidth, // 目标X位置
-            y * scaledTileHeight, // 目标Y位置
-            scaledTileWidth, // 目标宽度（原始的1/6）
-            scaledTileHeight // 目标高度（原始的1/6）
-          );
-        }
-      }
-    }
-
-    // 降低明度到80%（使用半透明黑色层）
-    ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'; // 20%黑色，使明度降至80%
-    ctx.fillRect(0, 0, GAME_CONFIG.WORLD_WIDTH, GAME_CONFIG.WORLD_HEIGHT);
-    ctx.restore();
-
-    // 创建遮罩层，只显示地图范围内的内容
-    ctx.save();
-    ctx.globalCompositeOperation = 'destination-in';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; // 同时设置80%不透明度
-    ctx.fillRect(0, 0, GAME_CONFIG.WORLD_WIDTH, GAME_CONFIG.WORLD_HEIGHT);
-    ctx.restore();
-
-    // 保存到ref中
-    mapBackgroundCanvasRef.current = canvas;
-    console.log(`Map background generated successfully`);
+    // 无可用地块时返回 null，清除旧背景并回退纯色
+    mapBackgroundCanvasRef.current = buildMapBackground(tileImages);
   }, [tileImages]);
+
+  // 生成随机障碍物（图片未加载时返回 null，保留旧障碍）
+  const generateObstacles = useCallback(() => {
+    const next = buildObstacles(runtime, obstacleImages);
+    if (next) setObstacles(next);
+  }, [runtime, obstacleImages]);
 
   // 加载完成后使用可用地块；全部失败时清除旧背景并回退纯色。
   useEffect(() => {
@@ -347,122 +284,6 @@ export default function TopDownShooterGame() {
     selectRandomUpgrades,
   ]);
 
-  // 生成随机障碍物
-  const generateObstacles = useCallback(() => {
-    // 确保图片已加载
-    if (Object.keys(obstacleImages).length === 0) {
-      console.warn('Obstacle images not loaded yet');
-      return;
-    }
-
-    const newObstacles: Obstacle[] = [];
-    const maxAttempts = 1000; // 最大尝试次数，防止无限循环
-
-    // 障碍物图片路径列表
-    const obstacleImagePaths = [
-      '/assets/obstacle_1.png',
-      '/assets/obstacle_2.png',
-      '/assets/obstacle_3.png',
-      '/assets/Obstacle_4.png',
-      '/assets/obstacle_5.png',
-    ];
-
-    // 障碍物配置（碰撞体积占图片的比例）
-    const obstacleConfigs = [
-      { collisionRatio: 0.7 }, // obstacle_1
-      { collisionRatio: 0.6 }, // obstacle_2
-      { collisionRatio: 0.8 }, // obstacle_3
-      { collisionRatio: 0.75 }, // obstacle_4
-      { collisionRatio: 0.65 }, // obstacle_5
-    ];
-
-    for (let i = 0; i < GAME_CONFIG.OBSTACLE_COUNT; i++) {
-      let attempts = 0;
-      let success = false;
-
-      while (attempts < maxAttempts && !success) {
-        attempts++;
-
-        // 随机选择障碍物类型
-        const obstacleIndex = Math.floor(runtime.random() * obstacleImagePaths.length);
-        const imagePath = obstacleImagePaths[obstacleIndex];
-        const obstacleImg = obstacleImages[imagePath];
-        const config = obstacleConfigs[obstacleIndex];
-
-        // 如果图片未加载，跳过
-        if (!obstacleImg) {
-          continue;
-        }
-
-        // 根据图片原始尺寸计算显示尺寸（保持比例）
-        const originalWidth = obstacleImg.width;
-        const originalHeight = obstacleImg.height;
-        const maxSize = 100; // 最大边长
-
-        let width, height;
-        if (originalWidth > originalHeight) {
-          width = maxSize;
-          height = (maxSize * originalHeight) / originalWidth;
-        } else {
-          height = maxSize;
-          width = (maxSize * originalWidth) / originalHeight;
-        }
-
-        // 生成随机位置（考虑障碍物实际尺寸）
-        const x = 100 + runtime.random() * (GAME_CONFIG.WORLD_WIDTH - 200 - width);
-        const y = 100 + runtime.random() * (GAME_CONFIG.WORLD_HEIGHT - 200 - height);
-
-        // 碰撞体积大小（图片非透明部分，保持比例）
-        const collisionWidth = width * config.collisionRatio;
-        const collisionHeight = height * config.collisionRatio;
-
-        // 确保不在玩家初始位置附近
-        const distToCenter = Math.sqrt(
-          Math.pow(x + width / 2 - GAME_CONFIG.WORLD_WIDTH / 2, 2) +
-            Math.pow(y + height / 2 - GAME_CONFIG.WORLD_HEIGHT / 2, 2)
-        );
-
-        if (distToCenter < 200) continue;
-
-        // 检查与其他障碍物的距离（不小于220px）
-        let tooClose = false;
-        for (const existing of newObstacles) {
-          const dx = x + width / 2 - (existing.x + existing.width / 2);
-          const dy = y + height / 2 - (existing.y + existing.height / 2);
-          const dist = Math.sqrt(dx * dx + dy * dy);
-
-          if (dist < 220) {
-            // 障碍物间距不小于220px
-            tooClose = true;
-            break;
-          }
-        }
-
-        if (tooClose) continue;
-
-        // 创建障碍物
-        const obstacle: Obstacle = {
-          id: `obstacle-${runtime.now()}-${i}`,
-          x,
-          y,
-          width,
-          height,
-          image: imagePath,
-          collisionWidth,
-          collisionHeight,
-        };
-
-        newObstacles.push(obstacle);
-        success = true;
-      }
-
-      if (!success) {
-        console.warn(`Failed to place obstacle ${i + 1} after ${maxAttempts} attempts`);
-      }
-    }
-
-    setObstacles(newObstacles);
-  }, [obstacleImages]);
 
   // 生成怪物
   const spawnMonsters = useCallback(

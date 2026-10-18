@@ -6,12 +6,12 @@ const ts = require('typescript');
 const { ASSET_PATHS } = require('../src/game/assets/manifest.ts');
 const { GAME_CONFIG } = require('../src/game/config/base.ts');
 
-// Execute the real page/hook callbacks with fake I/O, without a second map implementation.
-// B1.1 后资源装配在 useGameAssets，地图拼接仍在 page.tsx，两个回调分别从各自文件提取。
+// Execute the real hook/module callbacks with fake I/O, without a second map implementation.
+// B1.1 后资源装配在 useGameAssets；B1.5 后地图拼接在 game/map/mapBackground（返回 canvas，不再写 ref）。
 const loadSource = fs.readFileSync(path.join(__dirname, '../src/hooks/useGameAssets.ts'), 'utf8');
-const pageSource = fs.readFileSync(path.join(__dirname, '../src/app/page.tsx'), 'utf8');
+const mapSource = fs.readFileSync(path.join(__dirname, '../src/game/map/mapBackground.ts'), 'utf8');
 const loadAst = ts.createSourceFile('useGameAssets.ts', loadSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const pageAst = ts.createSourceFile('page.tsx', pageSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const mapAst = ts.createSourceFile('mapBackground.ts', mapSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 let loadEffect, generateMap;
 const visitLoad = node => {
   if (ts.isCallExpression(node) && node.expression.getText(loadAst) === 'useEffect' &&
@@ -19,18 +19,19 @@ const visitLoad = node => {
   ts.forEachChild(node, visitLoad);
 };
 visitLoad(loadAst);
-const visitPage = node => {
-  if (ts.isVariableDeclaration(node) && node.name.getText(pageAst) === 'generateMapBackground')
-    generateMap = node.initializer.arguments[0];
-  ts.forEachChild(node, visitPage);
+const visitMap = node => {
+  if (ts.isVariableDeclaration(node) && node.name.getText(mapAst) === 'buildMapBackground')
+    generateMap = node.initializer;
+  ts.forEachChild(node, visitMap);
 };
-visitPage(pageAst);
-function execute(callback, ast, scope) {
+visitMap(mapAst);
+function execute(callback, ast, scope, args = []) {
   assert.ok(callback, 'page callback exists');
   const code = ts.transpileModule(`const run = ${callback.getText(ast)};`, {
     compilerOptions: { target: ts.ScriptTarget.ES2020 },
   }).outputText;
-  return new Function(...Object.keys(scope), code + '\nreturn run();')(...Object.values(scope));
+  const fn = new Function(...Object.keys(scope), '__args', code + '\nreturn run(...__args);');
+  return fn(...Object.values(scope), args);
 }
 async function loadAssets(failedTiles = []) {
   const captured = {}, requests = [];
@@ -74,24 +75,24 @@ test('missing decorative tiles do not block startup and use remaining tiles or t
   assert.deepEqual(missing.setTileImages, []);
   assert.deepEqual(missing.setResourceErrors, []);
   assert.equal(missing.setIsLoading, false);
-  const background = { current: { old: true } };
-  execute(generateMap, pageAst, { tileImages: [], mapBackgroundCanvasRef: background });
-  assert.equal(background.current, null, 'failed reload clears a stale map cache');
+  // B1.5：无可用地块时返回 null，由调用方据此清除旧缓存、回退纯色
+  assert.equal(execute(generateMap, mapAst, {}, [[]]), null, 'empty tile set yields no background');
 });
 
 test('the page stitcher covers the world at the original scale, caches it and accepts a partial set', () => {
   for (const count of [5, 1]) {
     const tiles = Array.from({ length: count }, (_, i) => ({ width: 625, height: 350, id: i }));
-    const draws = [], fills = [], background = { current: null };
+    const draws = [], fills = [];
     const context = { drawImage: (...args) => draws.push(args), fillRect: (...args) => fills.push(args), save() {}, restore() {} };
     const canvas = { getContext: () => context };
-    execute(generateMap, pageAst, {
-      tileImages: tiles, mapBackgroundCanvasRef: background, GAME_CONFIG,
-      document: { createElement: () => canvas }, console: { log() {} },
-      // A visual background must not consume a seeded battle random source.
-      runtime: { random: () => assert.fail('map decoration consumed battle randomness') },
-    });
-    assert.equal(background.current, canvas);
+    // B1.5：函数签名不含 runtime，视觉背景在结构上无法消耗战斗随机源
+    const result = execute(
+      generateMap,
+      mapAst,
+      { GAME_CONFIG, document: { createElement: () => canvas } },
+      [tiles]
+    );
+    assert.equal(result, canvas);
     assert.equal(canvas.width, GAME_CONFIG.WORLD_WIDTH);
     assert.equal(canvas.height, GAME_CONFIG.WORLD_HEIGHT);
     const columns = Math.ceil(canvas.width / (625 / 6)), rows = Math.ceil(canvas.height / (350 / 6));

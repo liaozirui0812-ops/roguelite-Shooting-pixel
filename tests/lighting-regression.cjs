@@ -89,24 +89,25 @@ test('lighting remains safe without browser globals and can be disposed repeated
 });
 
 test('the actual page obstacle generator consumes path-keyed images and places 24 collidable obstacles', () => {
-  // Run the page's real callback without mounting React or making a parallel map generator.
+  // Run the real map-module callback without mounting React or making a parallel map generator.
+  // B1.5 后生成器在 src/game/map/obstacles.ts，返回障碍数组（图片缺失返回 null），不再经 setObstacles 回调。
   const fs = require('node:fs'), ts = require('typescript');
   const { GAME_CONFIG } = require('../src/game/config/base.ts');
   const { checkCollisionWithObstacle } = require('../src/game/rules/geometry.ts');
-  const source = fs.readFileSync(require('node:path').join(__dirname, '../src/app/page.tsx'), 'utf8');
-  const ast = ts.createSourceFile('page.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const source = fs.readFileSync(require('node:path').join(__dirname, '../src/game/map/obstacles.ts'), 'utf8');
+  const ast = ts.createSourceFile('obstacles.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   let callback;
   const visit = node => {
-    if (ts.isVariableDeclaration(node) && node.name.getText(ast) === 'generateObstacles') callback = node.initializer.arguments[0].getText(ast);
+    if (ts.isVariableDeclaration(node) && node.name.getText(ast) === 'buildObstacles') callback = node.initializer.getText(ast);
     ts.forEachChild(node, visit);
   };
   visit(ast); assert.ok(callback);
   const code = ts.transpileModule(`const generate = ${callback};`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
   const images = Object.fromEntries([5, 2, 4, 1, 3].map(i => [ASSET_PATHS['obstacle_' + i], { width: i === 5 ? 256 : 512, height: 256 }]));
-  let seed = 123456, result;
+  let seed = 123456;
   const runtime = { now: () => 1_000_000, random: () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; } };
-  const run = new Function('obstacleImages', 'GAME_CONFIG', 'runtime', 'setObstacles', code + '\nreturn generate();');
-  run(images, GAME_CONFIG, runtime, value => { result = value; });
+  const run = new Function('runtime', 'obstacleImages', 'GAME_CONFIG', code + '\nreturn generate(runtime, obstacleImages);');
+  const result = run(runtime, images, GAME_CONFIG);
   assert.equal(result.length, GAME_CONFIG.OBSTACLE_COUNT);
   assert.equal(new Set(result.map(o => o.image)).size, 5);
   for (const obstacle of result) {

@@ -1,6 +1,5 @@
 import type React from 'react';
 import {
-  Position,
   Player,
   Monster,
   PoisonCircle,
@@ -17,11 +16,20 @@ import {
   SmokeEffect,
   PierceEffect,
   Bullet,
-  Obstacle,
 } from '@/game';
 import type { GameRuntime, ValueUpdate } from '@/game/runtime/GameRuntime';
 import type { GameWorld } from '@/game/model/World';
 import type { SoundType } from '@/hooks/useSound';
+/**
+ * 表现类可变 ref 的合集（枪火/后坐力/震屏）。
+ * B2 收敛：三个独立 ref 字段合并为一个 viewFx 对象传入，
+ * 模拟层只做读写衰减，不拥有这些 ref 的生命周期（页面持有）。
+ */
+export interface ViewFxRefs {
+  muzzleFlashes: React.RefObject<MuzzleFlash[]>;
+  recoil: React.RefObject<{ backward: number; upward: number; shake: number }>;
+  screenShake: React.RefObject<number>;
+}
 export interface UpdateWorldContext {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   world: GameWorld;
@@ -49,12 +57,10 @@ export interface UpdateWorldContext {
   dashCooldownStartRef: React.RefObject<number>;
   setPlayer: (update: ValueUpdate<Player>) => void;
   NORMAL_MOVE_PPM: number;
-  checkRectCollision: (pos: Position, size: number, obstacle: Obstacle) => boolean;
   setKeys: (update: ValueUpdate<Set<string>>) => void;
   setBullets: (update: ValueUpdate<Bullet[]>) => void;
   playSound: (soundType: SoundType) => void;
-  muzzleFlashesRef: React.RefObject<MuzzleFlash[]>;
-  recoilRef: React.RefObject<{ backward: number; upward: number; shake: number }>;
+  viewFx: ViewFxRefs;
   setSmokeEffects: (update: ValueUpdate<SmokeEffect[]>) => void;
   triggerExplosion: (
     x: number,
@@ -64,7 +70,6 @@ export interface UpdateWorldContext {
     hasShockwave?: boolean,
     hasAPShot?: boolean
   ) => void;
-  checkCollision: (pos1: Position, pos2: Position, size1: number, size2: number) => boolean;
   setDamageNumbers: (update: ValueUpdate<DamageNumber[]>) => void;
   setAccumulatedDamage: (
     update: ValueUpdate<
@@ -101,7 +106,6 @@ export interface UpdateWorldContext {
   setBossBarrages: (update: ValueUpdate<BossBarrage[]>) => void;
   setGoldFloatingTexts: (update: ValueUpdate<GoldFloatingText[]>) => void;
   setVampireHealEffects: (update: ValueUpdate<VampireHealEffect[]>) => void;
-  screenShakeRef: React.RefObject<number>;
   checkLevelCompletion: () => void;
   setBossMaxHp: (value: number) => void;
 }

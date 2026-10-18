@@ -22,8 +22,7 @@ export function weaponSystem(context: UpdateWorldContext, tick: TickContext) {
     dashRef,
     setBullets,
     playSound,
-    muzzleFlashesRef,
-    recoilRef,
+    viewFx,
   } = context;
   const { now, effectiveReloadTime, weaponConfig, canvas } = tick;
   // 检查R键主动换弹
@@ -328,7 +327,7 @@ export function weaponSystem(context: UpdateWorldContext, tick: TickContext) {
         // 特殊处理手枪和冲锋枪：枪火大小缩小30%
         const flashScale = isShortRangeWeapon ? 0.5 * 0.7 : 0.5; // 手枪和冲锋枪35%，其他50%
 
-        muzzleFlashesRef.current.push({
+        viewFx.muzzleFlashes.current.push({
           id: flashId,
           x: gunMuzzleX,
           y: gunMuzzleY,
@@ -342,7 +341,7 @@ export function weaponSystem(context: UpdateWorldContext, tick: TickContext) {
 
       // 增加后坐力效果（仅视觉）
       const recoilStrength = weaponConfig.damage * 0.5; // 根据武器伤害决定后坐力强度
-      recoilRef.current = {
+      viewFx.recoil.current = {
         backward: 8 + recoilStrength * 0.3, // 后退距离
         upward: 0.08 + recoilStrength * 0.005, // 上跳角度（弧度）
         shake: 2 + recoilStrength * 0.1, // 晃动强度

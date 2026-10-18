@@ -1,4 +1,18 @@
-import type { Obstacle } from '@/game/model/types';
+import type { Obstacle, Position } from '@/game/model/types';
+
+// 圆与圆的碰撞检测（按半径和判定）
+// B2 从 page.tsx 下沉：纯几何函数，systems 直接引用，不再经 UpdateWorldContext 传递
+export const checkCircleCollision = (
+  pos1: Position,
+  pos2: Position,
+  size1: number,
+  size2: number
+): boolean => {
+  const dx = pos1.x - pos2.x;
+  const dy = pos1.y - pos2.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  return distance < size1 + size2;
+};
 
 // 辅助函数：检测线段与矩形是否相交
 export const lineRectIntersect = (

@@ -8,6 +8,8 @@ import {
   MONSTER_CONFIGS,
 } from '@/game';
 
+import { checkCircleCollision, checkCollisionWithObstacle } from '@/game/rules/geometry';
+
 import type { UpdateWorldContext, TickContext } from './context';
 
 export function enemyAttackSystem(context: UpdateWorldContext, tick: TickContext) {
@@ -21,9 +23,7 @@ export function enemyAttackSystem(context: UpdateWorldContext, tick: TickContext
     setGameState,
     stopBGM,
     setPlayerHitParticles,
-    checkCollision,
     setDamageNumbers,
-    checkRectCollision,
     setBossBarrages,
   } = context;
   const { now } = tick;
@@ -194,7 +194,7 @@ export function enemyAttackSystem(context: UpdateWorldContext, tick: TickContext
 
       const monsterConfig = MONSTER_CONFIGS[monster.monsterType];
 
-      if (checkCollision(world.player, monster, GAME_CONFIG.PLAYER_SIZE, monsterConfig.size)) {
+      if (checkCircleCollision(world.player, monster, GAME_CONFIG.PLAYER_SIZE, monsterConfig.size)) {
         const isBoss = monster.isBoss;
         const attackCD = isBoss ? 500 : 1000; // BOSS攻击CD更短（0.5秒）
 
@@ -672,7 +672,7 @@ export function enemyAttackSystem(context: UpdateWorldContext, tick: TickContext
               // 检测是否会撞到障碍物
               let collided = false;
               for (const obstacle of world.obstacles) {
-                if (checkRectCollision({ x: nextX, y: nextY }, GAME_CONFIG.PLAYER_SIZE, obstacle)) {
+                if (checkCollisionWithObstacle(nextX, nextY, GAME_CONFIG.PLAYER_SIZE, obstacle)) {
                   collided = true;
                   break;
                 }

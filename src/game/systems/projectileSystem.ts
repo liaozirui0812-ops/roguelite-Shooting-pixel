@@ -2,6 +2,8 @@ import { settleEnemyDeath } from '@/game/systems/death';
 
 import { resolveMonsterDamage } from '@/game/rules/damage';
 
+import { checkCircleCollision, checkCollisionWithObstacle } from '@/game/rules/geometry';
+
 import {
   GAME_CONFIG,
   getEffectiveCritRate,
@@ -24,7 +26,6 @@ export function projectileSystem(context: UpdateWorldContext, tick: TickContext)
     setSmokeEffects,
     triggerExplosion,
     setMonsters,
-    checkCollision,
     world,
     setDamageNumbers,
     setAccumulatedDamage,
@@ -35,7 +36,6 @@ export function projectileSystem(context: UpdateWorldContext, tick: TickContext)
     triggerVampireHeal,
     setBossCurrentHp,
     setPierceEffects,
-    checkRectCollision,
   } = context;
 
   // 更新子弹位置和检测碰撞
@@ -122,7 +122,7 @@ export function projectileSystem(context: UpdateWorldContext, tick: TickContext)
           }
           const monsterConfig = MONSTER_CONFIGS[monster.monsterType];
 
-          if (!hitMonster && checkCollision(bullet, monster, bullet.size, monsterConfig.size)) {
+          if (!hitMonster && checkCircleCollision(bullet, monster, bullet.size, monsterConfig.size)) {
             hitMonster = true;
 
             // 火箭弹碰撞检测：触发爆炸并影响范围内所有敌人
@@ -624,7 +624,7 @@ export function projectileSystem(context: UpdateWorldContext, tick: TickContext)
 
       // 检测与障碍物碰撞（穿透不影响与障碍物的碰撞）
       for (const obstacle of world.obstacles) {
-        if (checkRectCollision(bullet, bullet.size, obstacle)) {
+        if (checkCollisionWithObstacle(bullet.x, bullet.y, bullet.size, obstacle)) {
           // 火箭弹碰撞障碍物：触发爆炸
           if (bullet.isRocket) {
             triggerExplosion(

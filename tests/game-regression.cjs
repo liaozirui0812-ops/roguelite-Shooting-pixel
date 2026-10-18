@@ -43,9 +43,11 @@ function fixture(runtime) {
     DASH_COOLDOWN_MS: 5000,
     NORMAL_MOVE_PPM: 0.017,
     dashCooldownStartRef: ref(0),
-    recoilRef: ref({ backward: 0, upward: 0, shake: 0 }),
-    muzzleFlashesRef: ref([]),
-    screenShakeRef: ref(0),
+    viewFx: {
+      recoil: ref({ backward: 0, upward: 0, shake: 0 }),
+      muzzleFlashes: ref([]),
+      screenShake: ref(0),
+    },
     boomImage: null,
     playSound() {},
     stopBGM() {},
@@ -53,8 +55,6 @@ function fixture(runtime) {
     triggerVampireHeal() {},
     triggerScreenShake() {},
     checkLevelCompletion() {},
-    checkRectCollision: () => false,
-    checkCollision: (a, b, ra, rb) => Math.hypot(a.x - b.x, a.y - b.y) < ra + rb,
   };
   for (const key of Object.keys(runtime.state))
     context['set' + key[0].toUpperCase() + key.slice(1)] = runtime.setter(key);
@@ -521,6 +521,10 @@ test('rendering leaves World, recoil and simulation random state unchanged', () 
   };
   const renderer = {
     ...context,
+    // renderWorld 的 rendererContext 合同未改：仍按单个 ref 传递（同 page.tsx 装配）
+    recoilRef: context.viewFx.recoil,
+    muzzleFlashesRef: context.viewFx.muzzleFlashes,
+    screenShakeRef: context.viewFx.screenShake,
     canvasRef: ref(canvas),
     t: (key) => key,
     obstacleImages: {},
@@ -572,7 +576,7 @@ test('rendering leaves World, recoil and simulation random state unchanged', () 
   ])
     renderer[key + 'Image'] = null;
   const before = structuredClone(runtime.state),
-    recoil = structuredClone(context.recoilRef.current);
+    recoil = structuredClone(context.viewFx.recoil.current);
   let randomCalls = 0;
   runtime.random = () => {
     randomCalls++;
@@ -581,7 +585,7 @@ test('rendering leaves World, recoil and simulation random state unchanged', () 
   renderWorld(renderer, 16.67);
   renderWorld(renderer, 16.67);
   assert.deepEqual(runtime.state, before);
-  assert.deepEqual(context.recoilRef.current, recoil);
+  assert.deepEqual(context.viewFx.recoil.current, recoil);
   assert.equal(randomCalls, 0);
 });
 
@@ -681,7 +685,7 @@ test('restored map objects block walking and bullets while sampled dash collisio
   const obstacle = { id: 'restored', x: 3060, y: 2960, width: 100, height: 80,
     collisionWidth: 70, collisionHeight: 56, image: '/assets/obstacle_1.png' };
   runtime.state.obstacles = [obstacle]; runtime.state.keys = new Set(['d']);
-  context.checkRectCollision = (position, radius, object) => checkCollisionWithObstacle(position.x, position.y, radius, object);
+  // B2 后 systems 直接引用 rules/geometry 的 checkCollisionWithObstacle，无需注入假实现
   for (let i = 0; i < 60; i++) runtime.step(() => updateWorld(context));
   assert.ok(runtime.state.player.x <= 3050); assert.ok(runtime.state.player.x > 3000);
   runtime.state.keys.clear();

@@ -2,6 +2,8 @@ import { settleEnemyDeath } from '@/game/systems/death';
 
 import { resolveMonsterDamage } from '@/game/rules/damage';
 
+import { checkCollisionWithObstacle } from '@/game/rules/geometry';
+
 import {
   distToObstacle,
   GAME_CONFIG,
@@ -37,7 +39,6 @@ export function monsterSystem(context: UpdateWorldContext, tick: TickContext) {
     setBossAlive,
     setCoins,
     setPoisonCircles,
-    checkRectCollision,
   } = context;
 
   // 更新怪物位置 - 使用改进的智能避障算法
@@ -691,7 +692,7 @@ export function monsterSystem(context: UpdateWorldContext, tick: TickContext) {
       // 检查最终位置是否碰撞
       const isColliding = (pos: Position) => {
         for (const obstacle of world.obstacles) {
-          if (checkRectCollision(pos, monsterSize, obstacle)) {
+          if (checkCollisionWithObstacle(pos.x, pos.y, monsterSize, obstacle)) {
             return true;
           }
         }

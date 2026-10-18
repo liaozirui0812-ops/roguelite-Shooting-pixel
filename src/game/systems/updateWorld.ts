@@ -21,24 +21,23 @@ export function updateWorld(context: UpdateWorldContext) {
     runtime,
     setMonstersRemaining,
     setPlayer,
-    muzzleFlashesRef,
-    recoilRef,
+    viewFx,
     setBossAlive,
     setBossCurrentHp,
-    screenShakeRef,
     checkLevelCompletion,
     setBossMaxHp,
   } = context;
-  recoilRef.current = {
-    backward: recoilRef.current.backward * 0.85,
-    upward: recoilRef.current.upward * 0.85,
-    shake: recoilRef.current.shake * 0.85,
+  const { recoil, muzzleFlashes, screenShake } = viewFx;
+  recoil.current = {
+    backward: recoil.current.backward * 0.85,
+    upward: recoil.current.upward * 0.85,
+    shake: recoil.current.shake * 0.85,
   };
-  muzzleFlashesRef.current = muzzleFlashesRef.current.filter(
+  muzzleFlashes.current = muzzleFlashes.current.filter(
     (flash) => runtime.now() - flash.startTime < flash.duration
   );
-  screenShakeRef.current *= 0.86;
-  if (screenShakeRef.current < 0.5) screenShakeRef.current = 0;
+  screenShake.current *= 0.86;
+  if (screenShake.current < 0.5) screenShake.current = 0;
   const canvas = canvasRef.current;
   if (!canvas) return;
   const now = runtime.now();

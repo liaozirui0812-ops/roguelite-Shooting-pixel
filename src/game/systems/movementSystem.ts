@@ -1,5 +1,7 @@
 import { GAME_CONFIG, isDesperateFightActive, WEAPONS } from '@/game';
 
+import { checkCollisionWithObstacle } from '@/game/rules/geometry';
+
 import type { UpdateWorldContext, TickContext } from './context';
 
 export function movementSystem(context: UpdateWorldContext, tick: TickContext) {
@@ -13,7 +15,6 @@ export function movementSystem(context: UpdateWorldContext, tick: TickContext) {
     dashCooldownStartRef,
     setPlayer,
     NORMAL_MOVE_PPM,
-    checkRectCollision,
   } = context;
 
   // 消费闪现请求：按触发时的移动方向快照初始化闪现（0.4s 内位移 350px，期间无敌且无法攻击）
@@ -132,10 +133,10 @@ export function movementSystem(context: UpdateWorldContext, tick: TickContext) {
 
     // 障碍物碰撞检测
     for (const obstacle of world.obstacles) {
-      if (checkRectCollision({ x: newX, y: prev.y }, GAME_CONFIG.PLAYER_SIZE, obstacle)) {
+      if (checkCollisionWithObstacle(newX, prev.y, GAME_CONFIG.PLAYER_SIZE, obstacle)) {
         newX = prev.x;
       }
-      if (checkRectCollision({ x: newX, y: newY }, GAME_CONFIG.PLAYER_SIZE, obstacle)) {
+      if (checkCollisionWithObstacle(newX, newY, GAME_CONFIG.PLAYER_SIZE, obstacle)) {
         newY = prev.y;
       }
     }

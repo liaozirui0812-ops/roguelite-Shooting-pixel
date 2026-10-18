@@ -4,13 +4,10 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { useSound } from '@/hooks/useSound';
 import {
-  checkCollisionWithObstacle,
   GAME_CONFIG,
   WeaponType,
-  Position,
   Player,
   MuzzleFlash,
-  Obstacle,
   UpgradeType,
   ShopItem,
 } from '@/game';
@@ -369,19 +366,6 @@ export default function TopDownShooterGame() {
   // 重新开始
   const restartGame = () => restartGameCommand(runtime);
 
-  // 碰撞检测
-  const checkCollision = (pos1: Position, pos2: Position, size1: number, size2: number) => {
-    const dx = pos1.x - pos2.x;
-    const dy = pos1.y - pos2.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    return distance < size1 + size2;
-  };
-
-  // 检测矩形碰撞（玩家/怪物与障碍物）
-  const checkRectCollision = (pos: Position, size: number, obstacle: Obstacle) => {
-    return checkCollisionWithObstacle(pos.x, pos.y, size, obstacle);
-  };
-
   // 触发吸血回复效果
   const triggerVampireHeal = (healAmount: number) => {
     const now = runtime.now();
@@ -461,15 +445,17 @@ export default function TopDownShooterGame() {
     dashCooldownStartRef,
     setPlayer,
     NORMAL_MOVE_PPM,
-    checkRectCollision,
     setKeys,
     setBullets,
     playSound,
-    muzzleFlashesRef,
-    recoilRef,
+    // B2：三个表现类 ref 收敛为一个 viewFx 对象（ref 本体仍由页面持有）
+    viewFx: {
+      muzzleFlashes: muzzleFlashesRef,
+      recoil: recoilRef,
+      screenShake: screenShakeRef,
+    },
     setSmokeEffects,
     triggerExplosion,
-    checkCollision,
     setDamageNumbers,
     setAccumulatedDamage,
     setScore,
@@ -490,7 +476,6 @@ export default function TopDownShooterGame() {
     setBossBarrages,
     setGoldFloatingTexts,
     setVampireHealEffects,
-    screenShakeRef,
     checkLevelCompletion,
     setBossMaxHp,
   };

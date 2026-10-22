@@ -1,4 +1,5 @@
 import type { Monster, MonsterType } from '@/game/model/types';
+import { createBossState } from '@/game/rules/bossPose';
 import { MONSTER_CONFIGS } from '@/game/config/monsters';
 
 export interface MonsterSpawn {
@@ -42,7 +43,8 @@ export function createMonster(spawn: MonsterSpawn): Monster {
     isShooting: monsterType === 4 ? false : undefined,
     shootAnimationStartTime: monsterType === 4 ? 0 : undefined,
     // BOSS落地攻击初始状态
-    jumpAttackState: config.isBoss ? 'idle' : undefined,
-    jumpAttackStartTime: config.isBoss ? now : undefined,
+    jumpAttackState: monsterType === 5 ? 'idle' : undefined,
+    jumpAttackStartTime: monsterType === 5 ? now : undefined,
+    boss: monsterType === 6 || monsterType === 7 ? createBossState(monsterType === 6 ? 'boar' : 'mech', x, y) : undefined,
   };
 }

@@ -40,11 +40,13 @@ import {
   startGameWithWeapon as startGameWithWeaponCommand,
   restartGame as restartGameCommand,
 } from '@/game/commands/gameFlow';
+import { startBossTrial } from '@/game/commands/bossTrial';
 import { explodeWorld } from '@/game/systems/explosion';
 import { buildMapBackground } from '@/game/map/mapBackground';
 import { buildObstacles } from '@/game/map/obstacles';
 import { updateWorld } from '@/game/systems/updateWorld';
 import { renderWorld } from '@/game/render/renderWorld';
+import { createAimPresentation } from '@/game/rules/aim';
 import { LightingRenderer } from '@/game/render/lighting/lightingRenderer';
 import { LIGHTING_DEFAULTS, type LightingConfig, type LightingQuality } from '@/game/config/lighting';
 import { Language, translate, loadLanguage, LOCALE_STORAGE_KEY } from '@/i18n';
@@ -68,6 +70,7 @@ export default function TopDownShooterGame() {
   const world = runtime.state;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const aimPresentationRef = useRef(createAimPresentation());
   const lightingRef = useRef<LightingRenderer | null>(null);
   const [lightingConfig, setLightingConfig] = useState<LightingConfig>({ ...LIGHTING_DEFAULTS });
   useEffect(() => {
@@ -123,6 +126,7 @@ export default function TopDownShooterGame() {
   // 资源装配（图片加载、地块/障碍分组、失败重试）
   const { assets, tileImages, obstacleImages, resourceErrors, isLoading, loadProgress, retryLoad } =
     useGameAssets();
+  aimPresentationRef.current.blocked = isLoading || showSettings;
 
   // 语言切换（用 ref 让 canvas 闭包与 JSX 都读取最新语言）
   const [language, setLanguage] = useState<Language>(() => loadLanguage());
@@ -282,10 +286,12 @@ export default function TopDownShooterGame() {
   // 开始游戏（选择武器后）
   const startGameWithWeapon = useCallback(
     (weaponType: WeaponType) =>
+      {
       startGameWithWeaponCommand(
         runtime,
         weaponType,
         {
+          aimPresentationRef,
           dashRef,
           dashCooldownStartRef,
           dashPendingRef,
@@ -302,7 +308,9 @@ export default function TopDownShooterGame() {
             generateMapBackground();
           },
         }
-      ),
+      );
+      startBossTrial(runtime, new URLSearchParams(window.location.search).get('boss'));
+      },
     [runtime, playSound, generateObstacles, generateMapBackground]
   );
 
@@ -429,6 +437,7 @@ export default function TopDownShooterGame() {
     checkLevelCompletionCommand(runtime, { playSound, stopBGM, levelCompleteTimeoutRef });
 
   const simulationContext = {
+    aimPresentationRef,
     canvasRef,
     world,
     runtime,
@@ -480,6 +489,7 @@ export default function TopDownShooterGame() {
     setBossMaxHp,
   };
   const rendererContext = {
+    aimPresentationRef,
     // Read the ref inside the RAF callback, including the first frame after mounting.
     get lighting() { return lightingRef.current; },
     t,
@@ -499,6 +509,7 @@ export default function TopDownShooterGame() {
     bossFireBallImage: assets.bossFireBall ?? null,
     ballImage: assets.ball ?? null,
     rangeImage: assets.range ?? null,
+    bossParts: { bossBoarParts: assets.bossBoarParts, bossMechParts: assets.bossMechParts, bossFx: assets.bossFx },
     bossImage: assets.boss ?? null,
     boss2Image: assets.boss2 ?? null,
     enemy_1Image: assets.enemy_1 ?? null,
@@ -535,6 +546,8 @@ export default function TopDownShooterGame() {
       setKeys(new Set());
       setIsMouseDown(false);
       dashPendingRef.current = false;
+      aimPresentationRef.current.pointerValid = false;
+      if (canvasRef.current) canvasRef.current.style.cursor = 'default';
     });
   useGameLoop(
     runtime,
@@ -556,7 +569,8 @@ export default function TopDownShooterGame() {
   }, []);
 
   // 输入绑定（键盘/鼠标/滚轮/Canvas 按钮命中）
-  const { handleMouseMove, handleMouseDown, handleClick, handleMouseUp } = useGameInput({
+  const { handleMouseMove, handleMouseDown, handleClick, handleMouseUp, handleMouseLeave } = useGameInput({
+    aimPresentationRef,
     world,
     canvasRef,
     dashRef,
@@ -595,9 +609,10 @@ export default function TopDownShooterGame() {
             height={GAME_CONFIG.CANVAS_HEIGHT}
             className="rounded-lg cursor-crosshair"
             onMouseMove={handleMouseMove}
+            onMouseEnter={handleMouseMove}
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
             aria-label="战斗画布"
             tabIndex={0}
             data-game-state={view.gameState}

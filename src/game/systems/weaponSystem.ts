@@ -1,4 +1,5 @@
 import { deriveCombatStats } from '@/game/rules/combatStats';
+import { deriveAimSpread, getAimAngle, sampleShotAngle } from '@/game/rules/aim';
 
 import {
   GAME_CONFIG,
@@ -104,6 +105,9 @@ export function weaponSystem(context: UpdateWorldContext, tick: TickContext) {
 
   // 射击（切换武器期间无法射击）
   if (
+    world.gameState === 'playing' && !world.isPaused && world.player.hp > 0 &&
+    context.aimPresentationRef.current.pointerValid && !context.aimPresentationRef.current.blocked &&
+    context.aimPresentationRef.current.viewport &&
     world.isMouseDown &&
     world.player.currentAmmo > 0 &&
     !world.player.isSwitchingWeapon &&
@@ -124,11 +128,8 @@ export function weaponSystem(context: UpdateWorldContext, tick: TickContext) {
     const effectiveFireRate = deriveCombatStats(world.player, now).fireInterval;
 
     if (now - world.player.lastShot > effectiveFireRate) {
-      const canvasRect = canvas.getBoundingClientRect();
-      const baseAngle = Math.atan2(
-        world.mousePos.y - canvasRect.top - GAME_CONFIG.CANVAS_HEIGHT / 2,
-        world.mousePos.x - canvasRect.left - GAME_CONFIG.CANVAS_WIDTH / 2
-      );
+      const baseAngle = getAimAngle(world.player, world.mousePos, canvas, context.aimPresentationRef.current.viewport);
+      if (baseAngle === null) return;
 
       // 计算枪口位置（与武器渲染保持一致）
       const weaponScale = 1.56;
@@ -175,20 +176,10 @@ export function weaponSystem(context: UpdateWorldContext, tick: TickContext) {
 
       // 根据武器类型发射子弹
       const bulletCount = weaponConfig.bulletsPerShot;
-      const halfSpread = weaponConfig.spreadAngle / 2;
+      const aimSpread = deriveAimSpread(world.player, weaponConfig, world.aimSpread.movementBloom);
 
       for (let i = 0; i < bulletCount; i++) {
-        const angle =
-          bulletCount > 1
-            ? baseAngle - halfSpread + (weaponConfig.spreadAngle * i) / (bulletCount - 1)
-            : baseAngle;
-
-        // 添加轻微的随机散射
-        const spread =
-          weaponConfig.spreadAngle > 0
-            ? (runtime.random() - 0.5) * weaponConfig.spreadAngle * 0.3
-            : 0;
-        const finalAngle = angle + spread;
+        const finalAngle = sampleShotAngle(baseAngle, i, bulletCount, aimSpread, runtime.random);
 
         // 判断是否暴击（使用有效暴击率，带软上限）
         // 狂暴状态：暴击率+20%，暴击伤害+100%
@@ -368,6 +359,9 @@ export function weaponSystem(context: UpdateWorldContext, tick: TickContext) {
           // 检查第二发发射条件
           setPlayer((prev) => {
             if (
+              world.gameState !== 'playing' || world.isPaused || prev.hp <= 0 ||
+              dashRef.current.active || !hasGrowthChainNode(prev, 'rpg_dual_barrel') ||
+              !context.aimPresentationRef.current.pointerValid || context.aimPresentationRef.current.blocked ||
               prev.weapon !== 'rpg' ||
               prev.currentAmmo < 1 ||
               prev.isSwitchingWeapon ||
@@ -377,11 +371,10 @@ export function weaponSystem(context: UpdateWorldContext, tick: TickContext) {
             }
 
             const secondNow = runtime.now();
-            const canvasRect = canvas.getBoundingClientRect();
-            const baseAngle = Math.atan2(
-              world.mousePos.y - canvasRect.top - GAME_CONFIG.CANVAS_HEIGHT / 2,
-              world.mousePos.x - canvasRect.left - GAME_CONFIG.CANVAS_WIDTH / 2
-            );
+            const baseAngle = getAimAngle(prev, world.mousePos, canvas, context.aimPresentationRef.current.viewport);
+            if (baseAngle === null) return prev;
+            const spread = deriveAimSpread(prev, WEAPONS.rpg, world.aimSpread.movementBloom);
+            const finalAngle = sampleShotAngle(baseAngle, 0, 1, spread, runtime.random);
 
             // 计算枪口位置
             const weaponScale = 1.56;
@@ -404,8 +397,8 @@ export function weaponSystem(context: UpdateWorldContext, tick: TickContext) {
               id: `bullet-${runtime.now()}-second`,
               x: gunMuzzleX,
               y: gunMuzzleY,
-              vx: Math.cos(baseAngle) * rocketInitialSpeed,
-              vy: Math.sin(baseAngle) * rocketInitialSpeed,
+              vx: Math.cos(finalAngle) * rocketInitialSpeed,
+              vy: Math.sin(finalAngle) * rocketInitialSpeed,
               weapon: 'rpg',
               size: WEAPONS.rpg.bulletSize * rpgScale,
               color: WEAPONS.rpg.color,

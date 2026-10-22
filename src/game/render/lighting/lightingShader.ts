@@ -5,13 +5,16 @@ uniform vec4 uSlot;
 uniform vec4 uDest;
 uniform vec4 uSource;
 uniform float uFlip;
+uniform float uAngle;
 varying vec2 vLocal;
 varying vec2 vUV;
 varying vec2 vScreen;
 void main() {
   vLocal = aQuad;
   vUV = uSource.xy + aQuad * uSource.zw;
-  vScreen = uDest.xy + vec2(mix(aQuad.x, 1.0-aQuad.x, uFlip), aQuad.y) * uDest.zw;
+  mat2 rotation = mat2(cos(uAngle), sin(uAngle), -sin(uAngle), cos(uAngle));
+  vec2 local = (vec2(mix(aQuad.x, 1.0-aQuad.x, uFlip), aQuad.y) - 0.5) * uDest.zw;
+  vScreen = uDest.xy + uDest.zw * 0.5 + rotation * local;
   vec2 p = uSlot.xy + aQuad * uSlot.zw;
   gl_Position = vec4(p.x/uResolution.x*2.0-1.0, 1.0-p.y/uResolution.y*2.0, 0, 1);
 }`;
@@ -40,6 +43,7 @@ uniform float uStrength;
 uniform float uRim;
 uniform float uLevels;
 uniform float uFlip;
+uniform float uAngle;
 varying vec2 vLocal;
 varying vec2 vUV;
 varying vec2 vScreen;
@@ -59,6 +63,7 @@ void main() {
   }
   n.xy *= uAspect;
   n.x *= mix(1.0,-1.0,uFlip);
+  n.xy = mat2(cos(uAngle), sin(uAngle), -sin(uAngle), cos(uAngle)) * n.xy;
   n = normalize(n);
   vec2 delta = uLight - vScreen;
   float t = clamp((length(delta)-uRadii.x)/(uRadii.y-uRadii.x),0.0,1.0);

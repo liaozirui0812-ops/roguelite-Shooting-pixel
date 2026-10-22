@@ -1,3 +1,4 @@
+import { BOAR, MECH } from './bosses';
 import type { AffixType, AffixConfig, MonsterType } from '@/game/model/types';
 
 // 词缀配置表（支持权重，数值均可调）
@@ -211,4 +212,6 @@ export const MONSTER_CONFIGS: Record<
     jumpAttackDamageRadius: 100, // 落地伤害半径100px
     jumpAttackRecoveryDuration: 3000, // 硬直时间3秒
   },
+  6: { name: '裂鬃野猪王', size: BOAR.radius, baseSpeed: BOAR.moveSpeed / 60, damage: 12, hp: BOAR.hp, color: '#9b5037', canShoot: false, shootInterval: 0, bulletSpeed: 0, bulletDamage: 0, bulletRange: 0, goldBase: 50, isBoss: true },
+  7: { name: '多足机械', size: MECH.radius, baseSpeed: MECH.moveSpeed / 60, damage: 9, hp: MECH.hp, color: '#589b9e', canShoot: false, shootInterval: 0, bulletSpeed: 0, bulletDamage: 0, bulletRange: 0, goldBase: 50, isBoss: true },
 };

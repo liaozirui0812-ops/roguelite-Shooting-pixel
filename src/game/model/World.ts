@@ -71,6 +71,7 @@ export interface GameWorld {
   availableUpgrades: Upgrade[];
   keys: Set<string>;
   mousePos: Position;
+  aimSpread: { movementBloom: number };
   isMouseDown: boolean;
   isPaused: boolean;
   dashCooldown: number;
@@ -118,6 +119,7 @@ export function createWorld(): GameWorld {
     availableUpgrades: [],
     keys: new Set(),
     mousePos: { x: 0, y: 0 },
+    aimSpread: { movementBloom: 0 },
     isMouseDown: false,
     isPaused: false,
     dashCooldown: 0,

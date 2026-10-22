@@ -12,12 +12,14 @@ export interface LitSprite {
   source: Rect;
   dest: Rect;
   flip: boolean;
+  rotation?: number;
 }
 const centered = (x: number, y: number, width: number, height = width): Rect =>
   ({ x: x - width / 2, y: y - height / 2, width, height });
 
 /** Existing frame/size/mirror rules, shared by preparation and Canvas drawing. */
 export function monsterSprite(monster: Monster, now: number, images: SpriteImages): LitSprite | undefined {
+  if (monster.boss) return;
   const config = MONSTER_CONFIGS[monster.monsterType];
   let asset: keyof typeof SPRITE_ATLASES;
   let index: number;
@@ -86,7 +88,9 @@ export function drawOriginalSprite(ctx: CanvasRenderingContext2D, sprite: LitSpr
   image: CanvasImageSource = sprite.image, source: Rect = sprite.source) {
   const d = sprite.dest;
   ctx.save();
+  if (sprite.asset === 'bossBoarParts' || sprite.asset === 'bossMechParts' || sprite.asset === 'bossFx') ctx.imageSmoothingEnabled = false;
   ctx.translate(d.x + d.width / 2, d.y + d.height / 2);
+  if (sprite.rotation) ctx.rotate(sprite.rotation);
   if (sprite.flip) ctx.scale(-1, 1);
   ctx.drawImage(image, source.x, source.y, source.width, source.height,
     -d.width / 2, -d.height / 2, d.width, d.height);

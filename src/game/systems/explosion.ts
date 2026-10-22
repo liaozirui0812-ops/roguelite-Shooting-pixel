@@ -1,3 +1,4 @@
+import { bossExplosionHit } from '@/game/rules/bossPose';
 import { settleEnemyDeath } from '@/game/systems/death';
 
 import { resolveMonsterDamage } from '@/game/rules/damage';
@@ -52,13 +53,16 @@ export function explodeWorld(
       }
 
       // 计算怪物到爆炸点的距离
-      const dist = Math.sqrt(Math.pow(monster.x - x, 2) + Math.pow(monster.y - y, 2));
+      const bossHit = monster.boss ? bossExplosionHit(monster, { x, y }, radius, runtime.now()) : undefined;
+      const centerDist = Math.hypot(monster.x - x, monster.y - y);
+      // New large targets use surface distance. Ordinary enemy source multipliers stay unchanged.
+      const dist = monster.boss ? Math.max(0, centerDist - MONSTER_CONFIGS[monster.monsterType].size) : centerDist;
 
       // 如果在爆炸范围内，造成伤害
-      if (dist <= radius && !monster.isDying) {
+      if ((bossHit ? bossHit.core || bossHit.legIds.length > 0 : dist <= radius) && !monster.isDying) {
         // 根据距离分段计算伤害（150px半径版本）
         let damageMultiplier = 0;
-        if (dist <= 60) {
+        if (monster.boss || dist <= 60) {
           damageMultiplier = 1.0; // 100%伤害
         } else if (dist <= 120) {
           damageMultiplier = 0.7; // 70%伤害
@@ -77,6 +81,7 @@ export function explodeWorld(
           target: monster,
           amount: actualDamage,
           source: 'explosion',
+          bossHit: bossHit ? { ...bossHit, now: runtime.now() } : undefined,
           interceptAffix: true,
           respectInvincible: true,
         });

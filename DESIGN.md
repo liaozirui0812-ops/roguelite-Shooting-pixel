@@ -59,6 +59,7 @@ src/
 │  ├─ layout.tsx                根布局、开发 Inspector、页面元数据
 │  ├─ page.tsx                  阶段协调、输入、资源装配、React UI
 │  └─ globals.css               Tailwind 主题、像素字体
+├─ standalone.tsx              独立 HTML 入口，直接挂载同一个 page 游戏组件
 ├─ game/
 │  ├─ model/                    types.ts、World.ts、View.ts
 │  ├─ config/                   base.ts、weapons.ts、monsters.ts、lighting.ts
@@ -119,6 +120,10 @@ flowchart TD
 5. 战斗中检查活敌与待生成批次。`canCompleteLevel()` 通过后只登记一次 2000ms 模拟任务，再生成升级选项、进入 `upgrade`。
 6. `applyUpgrade()` 应用当前候选项的数值或成长节点，进入 `shop`。`exitShop()` 在事务中递增关卡、生成下一关敌人并回到 `playing`。
 7. 玩家致死伤害设为 `gameover`；重开先回到 `weaponSelect`，选定武器才实际重置。菜单返回也只是切阶段，不等于重置世界。
+
+独立 HTML 分发入口为根目录 `index.html`（生成产物）与 `启动游戏.cmd`。`src/standalone.tsx` 直接挂载同一 page 组件，沿用以上运行时/阶段/输入；不加载 Next 根布局、Inspector 或服务端路由，不维护第二份游戏。`scripts/export-html.cjs` 使用已有 esbuild、TypeScript AST 与 Tailwind/PostCSS 依赖构建生产脚本/CSS，把源内静态资源字符串（含 JSX 和内联 CSS url）在构建时映射为同一份 data URL 资源表；CSS 字体同样内嵌。缺失/大小写不符的资源直接使导出失败，覆盖非本工具生成的 HTML 也会拒绝。
+
+HTML 可脱离 Node/pnpm/HTTP 服务分发；源码变化后执行 `导出HTML.cmd` 或 `node scripts/export-html.cjs` 更新快照。具体游玩和本次验证限制见根目录 `游玩说明.md`。导出不改变原始 `/assets/...` 路径或 Next 开发行为。
 
 ```mermaid
 stateDiagram-v2
@@ -190,6 +195,10 @@ stateDiagram-v2
 
 `deriveCombatStats(player, now)` 提供有效暴击、暴伤、换弹、移速、射程和弹匣值。`damage/fireRate/weaponRange` 等当前直接存于 Player；加成字段同时用于记录/展示，不能假定都可重新计算或持久跨枪生效。
 
+移动散布由 `config/aim.ts` 调参、`rules/aim.ts` 计算。`movementSystem` 以碰撞后位移除以当前方向最大位移（复用派生移速，兼容未归一化的斜移）得到比例，更新唯一的 `world.aimSpread.movementBloom`；默认 100ms 扩张、220ms 恢复，不改变人物加减速。闪现期间及其结束步保持 1，暂停冻结，离开 playing 清零。`Player.accuracyPoints` 默认 0、上限 300；倍率为 `100/(100+有效精准点)`，缩小原有扇形、随机散射及新增移动散射。换枪/跨关保留精准，新局清零；当前未向奖励池投放精准成长。
+
+首发和 RPG 延迟第二发共用散布/视口规则；第二发重新检查阶段、存活、节点、武器、换弹/换枪、闪现及有效指针，读取最近已完成模拟步的 bloom。弹道只在生成时采样 runtime.random，RPG 继续通过 vx/vy 保持加速方向。详情及人工验收见 `docs/MOVEMENT_SPREAD_PLAN.md`。
+
 射击由当前武器配置生成 Bullet，一次射击扣一发弹药；散弹枪发 5 个弹体。空弹匣自动换弹，R 主动换弹；散弹逐发装填，已有弹药时按住射击可取消换弹。普通换枪保存旧弹药、恢复目标弹药、取消换弹并限制射击 1000ms。
 
 手枪末弹节点使用高穿透值 9999；孤注一掷调整最后三发伤害/末弹暴击与换弹。RPG 直接伤害为零，实际伤害来自爆炸：基础参数在系统中硬编码为伤害 120、半径 150，未直接采用 `WEAPONS.rpg.damage=84`；第二发通过 700ms 模拟任务产生。装备、升级装备、商店获取、回填弹药有不同路径，相关差异属于 TD-H02/H04，而非新增功能可依赖的规范。
@@ -224,7 +233,16 @@ stateDiagram-v2
 
 普通 AI 寻向玩家、前瞻采样避障、沿墙滑动及卡位推出；Boss 可穿过障碍物。类型 4 在距离 <600 时按配置周期射击；接触伤害按怪物独立 CD，普通敌人取 `damage*0.1`，Boss 取 `damage*2`，所以配置 damage 不是最终所有攻击的伤害。
 
-Boss 远程攻击生成两组 3×15 弹体；跳跃状态为 `idle → locking → jump_start → airborne → landing → recovery → idle`，从起跳到落地结算前设置无敌。落地造成范围伤害/击退并生成旋转弹幕。`recovery` 的“停止移动”仅有注释，移动系统未排除该阶段；DOT 更新也可能被 Boss 的旧对象返回覆盖（TD-H03）。
+Boss 远程攻击生成两组 3×15 弹体；跳跃状态为 `idle → locking → jump_start → airborne → landing → recovery → idle`，从起跳到落地结算前设置无敌。落地造成范围伤害/击退并生成旋转弹幕。`recovery` 的“停止移动”仅有注释，移动系统未排除该阶段；非致死 DOT 写回已于2026-10-20修复并通过各阶段回归；恢复期移动政策仍保留原行为（TD-H03 / R16）。
+
+2026-10-20 新 Boss 扩展：类型6为裂鬃野猪王，类型7为多足机械；第五关唯一 Boss 槽用 `runtime.random()` 等权选择5/6/7。旧跳跃、远程和旋转弹幕仅服务类型5。新增 `bossTypes.ts` 的 kind 联合状态由 Monster 工厂初始化为 inactive，`bossSystem.ts` 在真实激活时重置时钟，沿现有 enemyAttackSystem 推进技能，不增加 RAF 或权威状态副本。
+
+`bossPose.ts` 纯求值同时服务部件绘制、机械足端发射和腿段命中；落脚点保存在 Monster.boss 中。`bossGeometry.ts` 提供线段/胶囊/障碍扫掠；`bossDamage.ts` 在既有伤害来源/词缀处理后分配一次预算。八条腿不是独立敌人，不产生击杀/掉落；普通腿命中向主体传35%，爆炸覆盖腿共享一次预算，DOT只扣主体，全断腿有1000ms转换提示后暴露核心（1.25倍伤害）。
+
+`bossSprites.ts` 装配静态透明部件页与特效帧，LitSprite 新增可选 rotation（缺省不旋转）；原图、光照采样位置与法线旋转同步，单 Boss 一个主阴影。新资源沿 manifest/loader 必需资源错误提示接入。新敌弹用 ownerId 标记，保留单场已发弹，离开 playing 清理；旧实体跨阶段政策不变。音效复用 useSound 的五种新增合成提示与限流。
+
+隔离试玩：`?boss=slime|boar|mech` 在正常选枪及新局重置后调用 `commands/bossTrial.ts`，只生成所选Boss、清空待刷批次；不额外加强玩家。各腿耐久通过只读 GameView 摘要展示。详情见 [Boss实施记录](docs/BOSS_IMPLEMENTATION.md)。
+
 
 `AffixSystem` 是包含静态函数的普通对象，**没有 Affix 基类继承体系**。`init/onDamage/update/render/renderBelowHpBar` 共享 `Monster.affix` 和 `affixState`：每敌人最多一个词缀；狂暴在低血时改变速度、伤害与攻击周期；护盾抵挡前三次受拦截的伤害事件；自爆近身充能后造成范围伤害。新增词缀需同时处理数据、伤害/更新与视觉入口。
 
@@ -282,13 +300,15 @@ Canvas 绘制背景、边界、障碍、弹体、怪物/词缀、掉落、区域
 
 React 绘制加载、菜单、选武器、升级、商店、结束、设置、Buff 预览及部分 HUD。`AssetWidgets.tsx` 导出 `CoinIcon/UpgradeCard/ShopItemCard/SpecialRewardTooltip/PixelButton`；卡片仅回调业务命令。`UpgradeCard` 通过 `ASSET_PATHS.upgradePanel` 使用 `/assets/win_1.png` 作为背景；它是关卡升级卡片，不代表终局胜利阶段。`PixelButton` 加载到离屏 Canvas，按映射后的 alpha>30 做鼠标命中判断。
 
-约束：绘制不得修改 World/战斗冷却/伤害/掉落；允许更新镜头 ref。当前没有完整视口剔除，基础 Canvas 为 1200×800，没有统一缩放坐标转换；枪口宽度/偏移同时在射击和绘制中维护（TD-M03）。
+约束：绘制不得修改 World/战斗冷却/伤害/掉落；允许更新镜头和 `aimPresentationRef` 表现 ref。基础 Canvas 为 1200×800；`rules/aim.ts` 提供 client→逻辑画布→世界的换算，首发/第二发读取已显示视口，身体翻转/枪体使用当前绘制视口，包含镜头滞后、边界钳制与震屏。Canvas 暂停按钮同样按 DOM rect 缩放换算。当前没有完整视口剔除；枪口宽度/偏移仍在射击和绘制中重复维护（TD-M03）。
+
+四段动态准星在世界/光照之后、暂停遮罩之前绘制，间距由与射击相同的总散布包络计算；固定参考距离为 180px，不表示鼠标处的落点边界。指针有效且未暂停/遮挡时隐藏原生指针，退出画布/失焦/暂停时清理有效性及按住射击。新局命令清旧视口，首个有效绘制前不能射击；Canvas 直接读 World 的 bloom，未向 GameView 复制高频散布状态。
 
 ### 3.11 图片加载与资源身份
 
 **入口**：`assets/manifest.ts::ASSET_PATHS`、`loader.ts::loadImageAsset`、`atlases.ts`、页面加载 Effect。
 
-`AssetSpec` 字段为 key、src、可选 required/type/setter。加载器先设 onload/onerror 再设 src，附加版本查询参数，默认 15000ms 超时，支持 AbortSignal；结果明确区分 loaded/failed/aborted。页面统计完成率，默认把 `required!==false` 的失败视为阻塞；重试通过递增版本重新加载全部图片。
+`AssetSpec` 字段为 key、src、可选 required/type/setter。加载器先设 onload/onerror 再设 src，HTTP/相对资源附加版本查询参数，data/blob URL 保持原样以支持内嵌 HTML、避免破坏数据内容；默认 15000ms 超时，支持 AbortSignal。结果明确区分 loaded/failed/aborted。页面统计完成率，默认把 `required!==false` 的失败视为阻塞；重试通过递增版本重新加载全部图片。
 
 `SPRITE_ATLASES` 定义宽高、frameMs、帧矩形和 anchor，`validateAtlas()` 校验尺寸与矩形越界；非图集 key 不做尺寸校验。`ASSET_PATHS` 并未覆盖全部 UI/奖励图片，部分路径仍写在配置和 JSX。`Obstacle.image` 与 `obstacleImages` 使用相同资源路径；生成入口已修正为 imagePath，大小写沿用 manifest（含 `Obstacle_4.png`）。
 
@@ -328,6 +348,7 @@ WebGL不可用、着色器/驱动上传失败时全通道回退 basic；context 
 | --- | --- | --- |
 | `src/game/config/base.ts` | GAME_CONFIG、MAX_VALUES | ES 模块直接 import，系统/规则读取 |
 | `src/game/config/weapons.ts` | 武器、品质、抽取次数、词条、初始展示 | 工厂/装备/射击/候选/UI 分别读取 |
+| `src/game/config/aim.ts` | 移动散布开关/曲线/时间、精准点范围、五武器移动半角、四段准星尺寸 | 模块加载时显式校验；移动/射击/准星共用规则，角度表用度、计算转弧度 |
 | `src/game/config/monsters.ts` | 敌人、词缀、词缀概率、Boss 弹幕 | 工厂/生成/攻击/绘制读取 |
 | `src/game/config/lighting.ts` | LIGHTING_DEFAULTS、材质预设、缓冲/纹理预算 | 页面配置 → LightingRenderer；只影响表现，不参与伤害/碰撞 |
 | `src/game/rules/rewards.ts` | 静态 UPGRADES、商店元数据、特殊提示文案 | 商店用 SHOP_ITEM_CONFIGS；升级实际池在 offers.ts |
@@ -441,6 +462,9 @@ Boss 跳跃配置：检测7000ms/800px，锁定3000ms，起跳900ms，空中1600
 | Bullet/EnemyBullet/PoisonCircle/Coin | 来源系统产生，移动/碰撞/拾取消费 | 仅内存；过期或命中/收集移除，新局清空 |
 | 表现数组与 accumulatedDamage | 来源系统产生、effectSystem消费 | 部分在 World；新局清空。枪口/后坐力/震屏在页面 ref，需页面手动重置 |
 | keys/mousePos/isMouseDown | 页面输入 | 阶段/暂停清按住状态，新局重建；无输入回放 |
+| aimSpread.movementBloom | movementSystem 通过 runtime setter 写入 | 0～1；暂停冻结，换枪保留，离开 playing/新局清零；Canvas 只读 |
+| Player.accuracyPoints | createPlayer 初始化；当前无奖励来源 | 默认0，派生时钳制0～300；换枪/跨关保留，新局重置 |
+| aimPresentationRef | 页面/hook 管指针有效性与遮挡；render 发布已呈现视口 | 不属于 World；新局命令清空视口和有效性，退出画布/暂停/失焦失效；监听随 hook 清理 |
 | 闪现活动/冷却起点 | 页面 ref + movementSystem；剩余冷却在 World | 新局由页面额外重置，不能只调用 resetRunWorld 就假定所有 ref 已清 |
 | 相机、图片、Canvas、音频 | 页面/ref/hook | World 之外，通常跨关保留；卸载清理监听、RAF、任务及音频 |
 | `pixel_battle_language` | loadLanguage读取；页面switchLanguage可写但未被设置按钮调用 | localStorage字符串 zh/en，非法值回落zh；UI切换仅会话内生效、跨新局保留，刷新后恢复已存值/默认值 |
@@ -541,7 +565,7 @@ Boss 跳跃配置：检测7000ms/800px，锁定3000ms，起跳900ms，空中1600
 | --- | --- | --- |
 | TD-H01（已修正索引） | `generateObstacles()` 已按 imagePath 取图；真实回调回归和浏览器已确认生成/绘制24个障碍 | 玩家/弹体/采样闪现回归已通过；完整敌人避障、Boss 落地/击退组合仍按 technical_debt.md R01 追踪 |
 | TD-H02 | createPlayer基础速度2，两个装备函数基础1；换枪重算 damage/fireRate/range/speed，却未按既有加成还原。例：手枪伤害升级后切枪再切回，damage恢复配置/词条值；playerSpeedBonus和weaponRangeBonus的效果单位也不同。普通换枪/acquireWeapon未统一狙击基础穿透，equipWeaponFields另行计算 | 定义“武器基础/实例/局内加成/当前值”单一计算契约，先保留规则做路径对照，再统一装备/升级/切换；不要直接把显示bonus全部相加 |
-| TD-H03 | monsterSystem的Boss正常移动分支用 `{...monster}` 返回，覆盖前面updatedMonster中的非致死DOT扣血、tick时间、状态清理和击退位置；已有死亡登记队列并不能解决非致死状态丢失。recovery也仍进入移动分支 | 从已更新对象继续移动，明确每个Boss阶段能否移动/受伤；覆盖DOT跨阶段与恢复期验证 |
+| TD-H03 | 2026-10-20已修复旧对象返回导致的DOT/tick/到期状态丢失，六阶段及双DOT致死回归通过；recovery仍保留原移动政策，普通敌人击退与旧Boss位移合同仍见R07/R16 | 从已更新对象继续移动，明确每个Boss阶段能否移动/受伤；覆盖DOT跨阶段与恢复期验证 |
 | TD-H04 | 战斗结算存在多处隐含契约偏差：穿透弹没有命中敌人ID集合，留在同敌人碰撞范围会重复扣血/耗穿透；孤注一掷末弹只给9999穿透，不一定给不衰减tag；AP第一发在weaponSystem先120×3，再explodeWorld×3，中心实际可1080而非描述的360 | 将命中身份、末弹策略、爆炸基础伤害/倍率定义为显式字段；先按单来源与组合复现，修复需明确玩法预期。现有穿透用例把弹体手动移到另一敌人，未覆盖持续重叠 |
 | TD-H05 | getWeaponMagazine/deriveCombatStats/weaponSystem换弹/击杀补弹/页面HUD不一致：普通换弹遗漏随机magazine词条，RPG派生容量固定1/2但获取/HUD使用通用容量。Boss landing伤害未检查dashRef，与其他来源的闪现免伤不一致 | 统一有效弹匣查询后让获取/换弹/补弹/HUD共用；定义闪现伤害策略并在所有玩家受伤路径应用，补RPG/随机弹匣及Boss落地组合验证 |
 
@@ -551,7 +575,7 @@ Boss 跳跃配置：检测7000ms/800px，锁定3000ms，起跳900ms，空中1600
 | --- | --- | --- |
 | TD-M01 | page仍承载阶段命令/地图生成/武器切换/资源装配；renderWorld是单个大绘制入口；context暴露大量setter、React ref及Canvas；damage→affixes形成层级倒置，affixes混规则和画图 | 随功能变更逐步抽出小命令/绘制函数与窄context，优先隔离状态写入和纯规则；不启动全量重构 |
 | TD-M02 | 商店允许重复成长商品，锁定商品不重新判定资格，节点apply无幂等保护，购买仅验证ID/余额；重复节点可影响tier计数。升级weight=0经`||1`仍入池；大量权重复制成数组且会把小数向上取整 | 明确可重复/唯一策略、消费时校验节点/上限、用明确的权重抽样；保留锁定实例合同，数值差异单独审阅 |
-| TD-M03 | 视口参数1200×800与waveSystem的1280×720分裂；瞄准以屏幕中心为基准，不考虑镜头滞后/边界下玩家实际屏幕位置；CSS缩放无统一反变换；枪口尺寸在更新/绘制重复 | 统一viewport与screen↔world转换、共享枪口几何；先验证窗口/镜头边缘行为，移动端需另外实现输入 |
+| TD-M03 | R11 核心瞄准和 Canvas 按钮缩放换算已修复并有自动回归/半尺寸浏览器验收；视口1200×800与waveSystem的1280×720仍分裂，枪口尺寸仍在更新/绘制重复 | 补四边实机与震屏手感验收；另行共享枪口几何、整理刷怪视口；移动端需另外实现输入 |
 | TD-M04 | useSound每次发声创建Gain/Buffer节点；BGM振荡器数组只在stop清，缺onended移除/断开；首次交互监听受音量依赖重装；文件并发加载无in-flight去重，音量在音效gain和masterGain叠乘 | 先测长局与快速启停，再补节点结束清理/缓存Promise/统一增益；不能引用历史验收作为内存已无问题的证据 |
 | TD-M05 | startLevel只重置部分世界；上关弹体/毒圈/掉落可跨升级商店冻结后延续；阶段切换取消所有任务但不同时取消其承载实体 | 明确跨关保留政策，拆出清理入口后验证；当前不要擅自清空所有东西改变规则 |
 | TD-M06 | `/assets/poison.png`被商店/毒链引用但当前缺失；源码83条资源检查会失败。现有xlsx为9张旧表，导出脚本为10张且还有手写元数据；静态UPGRADES与动态升级池不同 | 资源改动同步引用与检查；Excel标为快照，审阅真实工厂/调用路径。不可把未读入xlsx当调参入口 |
@@ -599,6 +623,8 @@ pnpm lint:build
 UI/资源/阶段修改应人工验证：加载失败与重试 → 三种初始武器 → 移动/射击/换弹/换枪/闪现 → 暂停/恢复/失焦 → 清场/待刷批次 → 升级刷新 → 购买/锁定/跨关 → 死亡重开。机制修改再验证护盾、DOT、同帧多来源击杀、Boss跳跃/落地与成长组合。
 
 需要生产行为验证时再单独运行 `pnpm exec next build --webpack` 与本地生产服务；不要同时构建和类型检查。只做文档分析无需安装依赖/构建；`pnpm build` 会调用安装依赖的Bash包装，`export:config` 会写xlsx，均不是只读检查。
+
+HTML 交付另执行 `node scripts/export-html.cjs` 与 `node scripts/check-assets.cjs`；`test:game` 已包含 HTML 资源转换和 data/blob 图片加载回归。可用 `node scripts/serve-html.cjs` 仅在回环3100端口预览导出的同一个文件。2026-10-20 的 HTTP 预览已覆盖菜单→选枪→移动/射击/准星；内置浏览器禁止 file://，直接双击的本机验收仍待确认。不要把 HTTP 预览表述为已验证所有浏览器的 file:// 行为。
 
 ### 7.4 何时更新本文
 

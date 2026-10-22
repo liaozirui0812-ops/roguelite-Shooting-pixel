@@ -7,6 +7,7 @@ export function createPlayer(weaponType: WeaponType = 'pistol'): Player {
   const basePlayerSpeed = 2;
   const weaponSpeedBonus = selectedWeapon.playerSpeedBonus || 0;
   return {
+    accuracyPoints: 0,
     x: GAME_CONFIG.WORLD_WIDTH / 2,
     y: GAME_CONFIG.WORLD_HEIGHT / 2,
     hp: GAME_CONFIG.PLAYER_MAX_HP,

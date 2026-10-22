@@ -1,3 +1,6 @@
+import { bossExplosionHit } from '@/game/rules/bossPose';
+import { bossResistsKnockback } from './bossSystem';
+import { traceBossPath } from '@/game/rules/bossGeometry';
 import { settleEnemyDeath } from '@/game/systems/death';
 
 import { resolveMonsterDamage } from '@/game/rules/damage';
@@ -59,7 +62,8 @@ export function zoneSystem(context: UpdateWorldContext, tick: TickContext) {
             Math.pow(m.x - world.player.x, 2) + Math.pow(m.y - world.player.y, 2)
           );
 
-          if (dist <= auraRadius) {
+          const bossHit = m.boss ? bossExplosionHit(m, world.player, auraRadius, auraNow) : undefined;
+          if (bossHit ? bossHit.core || bossHit.legIds.length > 0 : dist <= auraRadius) {
             // 在气场内，计算击退方向
             const dx = m.x - world.player.x;
             const dy = m.y - world.player.y;
@@ -80,6 +84,11 @@ export function zoneSystem(context: UpdateWorldContext, tick: TickContext) {
             newX = Math.max(20, Math.min(GAME_CONFIG.WORLD_WIDTH - 20, newX));
             newY = Math.max(20, Math.min(GAME_CONFIG.WORLD_HEIGHT - 20, newY));
 
+            if (m.boss) {
+              const end = bossResistsKnockback(m) ? { x: m.x, y: m.y }
+                : traceBossPath(m, { x: newX, y: newY }, MONSTER_CONFIGS[m.monsterType].size, world.obstacles, GAME_CONFIG.WORLD_WIDTH, GAME_CONFIG.WORLD_HEIGHT).to;
+              newX = end.x; newY = end.y;
+            }
             return {
               ...m,
               x: newX,
@@ -130,7 +139,8 @@ export function zoneSystem(context: UpdateWorldContext, tick: TickContext) {
 
             const dist = Math.sqrt(Math.pow(m.x - circle.x, 2) + Math.pow(m.y - circle.y, 2));
 
-            if (dist <= circle.radius) {
+            const bossHit = m.boss ? bossExplosionHit(m, circle, circle.radius, currentTime) : undefined;
+            if (bossHit ? bossHit.core || bossHit.legIds.length > 0 : dist <= circle.radius) {
               // 在毒圈内，造成伤害
               const newHp = resolveMonsterDamage({
                 target: m,

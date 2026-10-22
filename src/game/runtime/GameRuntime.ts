@@ -3,8 +3,10 @@ export type ValueUpdate<T> = T | ((current: T) => T);
 export interface RuntimePhase {
   gameState: string;
   isPaused: boolean;
+  enemyBullets?: { ownerId?: string }[];
   keys?: Set<string>;
   isMouseDown?: boolean;
+  aimSpread?: { movementBloom: number };
 }
 
 interface Task {
@@ -86,7 +88,12 @@ export class GameRuntime<S extends RuntimePhase> {
         this.criticalDirty = true;
       if (key === 'gameState' && previous !== next) {
         this.state.isPaused = false;
-        if (next !== 'playing') this.tasks.clear();
+        if (next !== 'playing') {
+          this.tasks.clear();
+          if (this.state.aimSpread) this.state.aimSpread = { movementBloom: 0 };
+          // Only the two new Bosses tag owned hazards. Preserve legacy cross-stage policy.
+          if (this.state.enemyBullets) this.state.enemyBullets = this.state.enemyBullets.filter(b => !b.ownerId);
+        }
       }
       if ((key === 'isPaused' && next) || (key === 'gameState' && next !== 'playing')) {
         this.state.keys?.clear();

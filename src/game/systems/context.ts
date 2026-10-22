@@ -20,6 +20,7 @@ import {
 import type { GameRuntime, ValueUpdate } from '@/game/runtime/GameRuntime';
 import type { GameWorld } from '@/game/model/World';
 import type { SoundType } from '@/hooks/useSound';
+import type { AimPresentation } from '@/game/rules/aim';
 /**
  * 表现类可变 ref 的合集（枪火/后坐力/震屏）。
  * B2 收敛：三个独立 ref 字段合并为一个 viewFx 对象传入，
@@ -31,6 +32,7 @@ export interface ViewFxRefs {
   screenShake: React.RefObject<number>;
 }
 export interface UpdateWorldContext {
+  aimPresentationRef: React.RefObject<AimPresentation>;
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   world: GameWorld;
   runtime: GameRuntime<GameWorld>;

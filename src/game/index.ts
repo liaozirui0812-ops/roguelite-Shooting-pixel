@@ -1,4 +1,5 @@
 export * from './rules/geometry';
+export * from './config/aim';
 export * from './config/base';
 export * from './rules/stats';
 export * from './model/types';

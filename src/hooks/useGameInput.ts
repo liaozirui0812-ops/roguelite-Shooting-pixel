@@ -3,6 +3,7 @@ import { GAME_CONFIG, type Position } from '@/game';
 import type { GameWorld } from '@/game/model/World';
 import type { ValueUpdate } from '@/game/runtime/GameRuntime';
 import type { GameAssets } from './useGameAssets';
+import { clientToCanvas, type AimPresentation } from '@/game/rules/aim';
 
 interface DashState {
   active: boolean;
@@ -15,6 +16,7 @@ interface DashState {
 }
 
 export interface GameInputDeps {
+  aimPresentationRef: React.RefObject<AimPresentation>;
   world: GameWorld;
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   dashRef: React.RefObject<DashState>;
@@ -31,6 +33,7 @@ export interface GameInputDeps {
 }
 
 export interface GameInputHandlers {
+  handleMouseLeave: () => void;
   handleMouseMove: (e: React.MouseEvent<HTMLCanvasElement>) => void;
   handleMouseDown: () => void;
   handleClick: (e: React.MouseEvent<HTMLCanvasElement>) => void;
@@ -43,6 +46,7 @@ export interface GameInputHandlers {
  * 注意：world 是 runtime.state 的可变引用，闭包内读取的始终是最新值，键盘 Effect 因此维持空依赖。
  */
 export function useGameInput({
+  aimPresentationRef,
   world,
   canvasRef,
   dashRef,
@@ -57,6 +61,12 @@ export function useGameInput({
   switchWeapon,
   switchWeaponTo,
 }: GameInputDeps): GameInputHandlers {
+  useEffect(() => {
+    if (world.isPaused || world.gameState !== 'playing') {
+      aimPresentationRef.current.pointerValid = false;
+      if (canvasRef.current) canvasRef.current.style.cursor = 'default';
+    }
+  }, [world.isPaused, world.gameState, aimPresentationRef, canvasRef]);
   // 键盘事件
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -169,13 +179,15 @@ export function useGameInput({
 
   // 鼠标事件
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!world.isPaused) {
+    if (world.gameState === 'playing' && !world.isPaused && !aimPresentationRef.current.blocked) {
       setMousePos({ x: e.clientX, y: e.clientY });
+      aimPresentationRef.current.pointerValid = true;
     }
   };
 
   const handleMouseDown = () => {
-    if (world.gameState === 'playing' && !world.isPaused) {
+    if (world.gameState === 'playing' && !world.isPaused &&
+      aimPresentationRef.current.pointerValid && !aimPresentationRef.current.blocked) {
       setIsMouseDown(true);
     }
   };
@@ -186,8 +198,9 @@ export function useGameInput({
 
     // 计算点击位置相对于canvas的坐标
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const point = clientToCanvas({ x: e.clientX, y: e.clientY }, rect, GAME_CONFIG.CANVAS_WIDTH, GAME_CONFIG.CANVAS_HEIGHT);
+    if (!point) return;
+    const { x, y } = point;
 
     // 如果游戏暂停，检查是否点击了继续游戏按钮或设置按钮
     if (world.isPaused) {
@@ -242,6 +255,11 @@ export function useGameInput({
   };
 
   const handleMouseUp = () => setIsMouseDown(false);
+  const handleMouseLeave = () => {
+    aimPresentationRef.current.pointerValid = false;
+    if (canvasRef.current) canvasRef.current.style.cursor = 'default';
+    setIsMouseDown(false);
+  };
 
-  return { handleMouseMove, handleMouseDown, handleClick, handleMouseUp };
+  return { handleMouseMove, handleMouseDown, handleClick, handleMouseUp, handleMouseLeave };
 }

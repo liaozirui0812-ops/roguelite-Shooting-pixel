@@ -7,6 +7,7 @@ import { resetRunWorld } from '../src/game/runtime/createRun';
 import type { Monster } from '../src/game/model/types';
 import { LIGHTING_DEFAULTS, type LightingConfig } from '../src/game/config/lighting';
 import { translate } from '../src/i18n';
+import { createAimPresentation } from '../src/game/rules/aim';
 
 // Isolated, deterministic rendering fixture. Never included in the application bundle.
 const canvas = document.querySelector('canvas')!;
@@ -21,6 +22,7 @@ world.mousePos = { x: 1000, y: 400 };
 const runtime = new GameRuntime(world, () => { throw new Error('render consumed simulation randomness'); });
 runtime.now = () => time;
 const context: RenderWorldContext = {
+  aimPresentationRef: ref(createAimPresentation()),
   canvasRef: ref(canvas), world, runtime, lighting: renderer, t: key => translate(key, 'zh'),
   screenShakeRef: ref(0), cameraPosRef: ref({ x: 3000, y: 3000 }), cameraTargetRef: ref({ x: 3000, y: 3000 }),
   cameraInitRef: ref(false), playerPrevPosRef: ref({ x: 3000, y: 3000 }), baseTransformRef: ref(null),

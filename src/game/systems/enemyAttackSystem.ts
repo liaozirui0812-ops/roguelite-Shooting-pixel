@@ -1,3 +1,5 @@
+import { bossSystem } from './bossSystem';
+import { segmentCircleT, traceBossPath } from '@/game/rules/bossGeometry';
 import {
   GAME_CONFIG,
   Monster,
@@ -27,6 +29,8 @@ export function enemyAttackSystem(context: UpdateWorldContext, tick: TickContext
     setBossBarrages,
   } = context;
   const { now } = tick;
+  bossSystem(context, tick);
+  if (world.gameState !== 'playing') return;
   // 敌人射击逻辑（敌人4会发射子弹）
   const shootTime = runtime.now();
   setMonsters((prev) => {
@@ -99,7 +103,12 @@ export function enemyAttackSystem(context: UpdateWorldContext, tick: TickContext
 
   // 更新敌人子弹位置和检测碰撞
   setEnemyBullets((prev) => {
+    const spent = new Set(prev.filter(b => b.groupSpent && b.attackGroup).map(b => b.attackGroup!));
     const updatedBullets = prev.map((bullet) => {
+      if (bullet.attackGroup && spent.has(bullet.attackGroup)) return { ...bullet, shouldRemove: true };
+      if (bullet.ownerId && traceBossPath(bullet, { x: bullet.x + bullet.vx, y: bullet.y + bullet.vy }, bullet.size,
+        world.obstacles, GAME_CONFIG.WORLD_WIDTH, GAME_CONFIG.WORLD_HEIGHT).blocked) return { ...bullet, shouldRemove: true };
+
       // 如果子弹已经击中过玩家，标记为需要移除
       if (bullet.hasHitPlayer) {
         return { ...bullet, shouldRemove: true };
@@ -137,7 +146,10 @@ export function enemyAttackSystem(context: UpdateWorldContext, tick: TickContext
       }
 
       const bulletHitRadius = bullet.size || 5;
-      if (distToPlayer < GAME_CONFIG.PLAYER_SIZE + bulletHitRadius && !dashRef.current.active) {
+      if ((bullet.ownerId
+        ? segmentCircleT(bullet, { x: bulletX, y: bulletY }, world.player, GAME_CONFIG.PLAYER_SIZE + bulletHitRadius) !== null
+        : distToPlayer < GAME_CONFIG.PLAYER_SIZE + bulletHitRadius) && !dashRef.current.active) {
+        if (bullet.attackGroup) spent.add(bullet.attackGroup);
         // 造成伤害
         setPlayer((prevPlayer) => {
           const newHp = prevPlayer.hp - bullet.damage;
@@ -180,7 +192,7 @@ export function enemyAttackSystem(context: UpdateWorldContext, tick: TickContext
     });
 
     // 过滤掉需要移除的子弹
-    return updatedBullets.filter((bullet) => !bullet.shouldRemove);
+    return updatedBullets.filter((bullet) => !bullet.shouldRemove && !(bullet.attackGroup && spent.has(bullet.attackGroup)) && (!bullet.ownerId || world.gameState === 'playing'));
   });
 
   // 检测怪物与玩家碰撞
@@ -188,7 +200,7 @@ export function enemyAttackSystem(context: UpdateWorldContext, tick: TickContext
     let playerDamaged = false;
     for (const monster of world.monsters) {
       // 死亡的怪物不造成伤害
-      if (monster.isDying) continue;
+      if (monster.isDying || monster.boss) continue;
       // 闪现期间玩家无敌，不造成接触伤害
       if (dashRef.current.active) continue;
 
@@ -278,7 +290,7 @@ export function enemyAttackSystem(context: UpdateWorldContext, tick: TickContext
 
     for (const monster of newMonsters) {
       // 跳过死亡的怪物和不是BOSS的怪物
-      if (monster.isDying || !monster.isBoss) continue;
+      if (monster.isDying || monster.monsterType !== 5) continue;
 
       // 如果BOSS正在进行落地攻击，跳过远程攻击
       if (monster.jumpAttackState && monster.jumpAttackState !== 'idle') {
@@ -497,7 +509,7 @@ export function enemyAttackSystem(context: UpdateWorldContext, tick: TickContext
   setMonsters((prevMonsters) => {
     const newMonsters: Monster[] = prevMonsters.map((monster) => {
       // 只处理BOSS
-      if (!monster.isBoss || monster.isDying) return monster;
+      if (monster.monsterType !== 5 || monster.isDying) return monster;
 
       const config = MONSTER_CONFIGS[monster.monsterType];
       if (!config.canJumpAttack) return monster;

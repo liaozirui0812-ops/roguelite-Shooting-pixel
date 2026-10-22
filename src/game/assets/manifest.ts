@@ -1,5 +1,8 @@
 // Canonical image identity; URL and completion order never determine indices.
 export const ASSET_PATHS = {
+  bossBoarParts: '/assets/bosses/boar_king/parts-v1.png',
+  bossMechParts: '/assets/bosses/mech_centipede/parts-v1.png',
+  bossFx: '/assets/bosses/shared/effects-v1.png',
   coin: '/assets/coin.png',
   bullet: '/assets/bullet.png',
   smoke: '/assets/smoke.png',

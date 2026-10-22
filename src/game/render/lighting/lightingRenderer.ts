@@ -128,7 +128,7 @@ export class LightingRenderer {
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0,0,1,0,0,1,1,1]), gl.STATIC_DRAW);
       const quad = gl.getAttribLocation(program, 'aQuad');
       gl.enableVertexAttribArray(quad); gl.vertexAttribPointer(quad, 2, gl.FLOAT, false, 0, 0);
-      for (const name of ['Resolution','Slot','Dest','Source','Flip','Color','Normal','NormalRect','Bounds',
+      for (const name of ['Resolution','Slot','Dest','Source','Flip','Angle','Color','Normal','NormalRect','Bounds',
         'Texel','Light','Radii','Aspect','Ambient','Direct','Height','Exponent','Floor','Strength','Rim','Levels']) {
         this.uniforms[name] = gl.getUniformLocation(program, `u${name}`);
       }
@@ -253,7 +253,11 @@ export class LightingRenderer {
       const light = worldToScreen(frame.light, frame.camera);
       const sprites = frame.sprites.filter(sprite => {
         if (!LIGHTING_MATERIALS[sprite.asset]) return false;
-        const d = sprite.dest, p = worldToScreen(d, frame.camera);
+        const original = sprite.dest, angle = sprite.rotation ?? 0;
+        const width = Math.abs(Math.cos(angle)) * original.width + Math.abs(Math.sin(angle)) * original.height;
+        const height = Math.abs(Math.sin(angle)) * original.width + Math.abs(Math.cos(angle)) * original.height;
+        const d = { x: original.x + (original.width - width) / 2, y: original.y + (original.height - height) / 2, width, height };
+        const p = worldToScreen(d, frame.camera);
         if (p.x + d.width < 0 || p.y + d.height < 0 || p.x > frame.width || p.y > frame.height) return false;
         const dx = Math.max(p.x - light.x, 0, light.x - p.x - d.width);
         const dy = Math.max(p.y - light.y, 0, light.y - p.y - d.height);
@@ -294,6 +298,7 @@ export class LightingRenderer {
         const min = Math.min(d.width*b.width, d.height*b.height);
         gl.uniform2f(u.Aspect, min/(d.width*b.width), min/(d.height*b.height));
         gl.uniform1f(u.Flip, sprite.flip ? 1 : 0);
+        gl.uniform1f(u.Angle, sprite.rotation ?? 0);
         gl.uniform1f(u.Strength, config.normalStrength * material.strength);
         gl.uniform1f(u.Rim, config.quality === 'high' && material.rim ? config.rimStrength : 0);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

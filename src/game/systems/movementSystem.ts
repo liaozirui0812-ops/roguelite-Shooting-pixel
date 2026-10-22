@@ -1,4 +1,6 @@
-import { GAME_CONFIG, isDesperateFightActive, WEAPONS } from '@/game';
+import { GAME_CONFIG, AIM_CONFIG } from '@/game';
+import { deriveCombatStats } from '@/game/rules/combatStats';
+import { advanceMovementBloom, movementSpeedRatio } from '@/game/rules/aim';
 
 import { checkCollisionWithObstacle } from '@/game/rules/geometry';
 
@@ -62,27 +64,16 @@ export function movementSystem(context: UpdateWorldContext, tick: TickContext) {
     }
   }
 
+  const before = { x: world.player.x, y: world.player.y };
+  const dashedThisStep = dashRef.current.active;
+  const currentSpeed = deriveCombatStats(world.player, runtime.now()).moveSpeed;
+  const down = (...names: string[]) => names.some(name => world.keys.has(name)) ? 1 : 0;
+  const inputX = down('d', 'D', 'ArrowRight') - down('a', 'A', 'ArrowLeft');
+  const inputY = down('s', 'S', 'ArrowDown') - down('w', 'W', 'ArrowUp');
+
   // 更新玩家位置
   setPlayer((prev) => {
     const now = runtime.now();
-
-    // 获取当前武器的速度倍率
-    const currentWeapon = WEAPONS[prev.weapon];
-    const weaponSpeedMultiplier = currentWeapon?.playerSpeedMultiplier ?? 1.0;
-
-    // 狂暴状态：移动速度+1
-    const desperateActive = isDesperateFightActive(prev);
-    const desperateSpeedBonus = desperateActive ? 1 : 0;
-
-    // 检查是否处于受击状态
-    let currentSpeed = (prev.playerSpeed + desperateSpeedBonus) * weaponSpeedMultiplier;
-    if (prev.isHit && now - prev.hitTime < GAME_CONFIG.HIT_EFFECT_DURATION) {
-      // 受击时减速
-      currentSpeed =
-        (prev.playerSpeed + desperateSpeedBonus) *
-        weaponSpeedMultiplier *
-        GAME_CONFIG.HIT_SLOWDOWN_FACTOR;
-    }
 
     let newX = prev.x;
     let newY = prev.y;
@@ -161,4 +152,11 @@ export function movementSystem(context: UpdateWorldContext, tick: TickContext) {
       animationStartTime: animationStartTime,
     };
   });
+  const ratio = movementSpeedRatio(
+    Math.hypot(world.player.x - before.x, world.player.y - before.y),
+    currentSpeed, Math.hypot(inputX, inputY)
+  );
+  const movementBloom = !AIM_CONFIG.enabled ? 0 : dashedThisStep ? 1 :
+    advanceMovementBloom(world.aimSpread.movementBloom, ratio, runtime.stepMs);
+  runtime.set('aimSpread', { movementBloom });
 }

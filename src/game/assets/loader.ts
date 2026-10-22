@@ -50,6 +50,9 @@ export function loadImageAsset(
     };
     image.onerror = () => finish({ key: asset.key, status: 'failed', reason: 'load failed' });
     signal.addEventListener('abort', abort, { once: true });
-    image.src = `${asset.src}${asset.src.includes('?') ? '&' : '?'}v=${version}`;
+    // Embedded/offline assets are already immutable; a query suffix corrupts data URLs.
+    image.src = /^(data:|blob:)/.test(asset.src)
+      ? asset.src
+      : `${asset.src}${asset.src.includes('?') ? '&' : '?'}v=${version}`;
   });
 }

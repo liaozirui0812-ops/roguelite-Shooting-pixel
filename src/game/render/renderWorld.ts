@@ -1,4 +1,8 @@
+import { bossSprites, drawBossWarnings, drawBossShadow, drawBossBullet } from './bossSprites';
 import { deriveCombatStats } from '@/game/rules/combatStats';
+import { AIM_CONFIG, CROSSHAIR_CONFIG } from '@/game/config/aim';
+import { clientToCanvas, deriveAimSpread, getAimAngle, type AimPresentation } from '@/game/rules/aim';
+import { drawCrosshair } from './crosshair';
 import type React from 'react';
 import {
   GAME_CONFIG,
@@ -15,6 +19,7 @@ import { LightingRenderer, obstacleAssetId } from './lighting/lightingRenderer';
 import { monsterSprite, playerSprite, drawOriginalSprite, type LitSprite, type SpriteImages } from './lighting/spriteLayout';
 
 export interface RenderWorldContext {
+  aimPresentationRef: React.RefObject<AimPresentation>;
   lighting?: LightingRenderer | null;
   t: (key: string) => string;
   world: GameWorld;
@@ -39,6 +44,7 @@ export interface RenderWorldContext {
   bossFireBallImage: HTMLImageElement | null;
   ballImage: HTMLImageElement | null;
   rangeImage: HTMLImageElement | null;
+  bossParts?: SpriteImages;
   bossImage: HTMLImageElement | null;
   boss2Image: HTMLImageElement | null;
   enemy_1Image: HTMLImageElement | null;
@@ -546,9 +552,14 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
   );
   const cameraX = clampedCamX - halfW + shakeOffX;
   const cameraY = clampedCamY - halfH + shakeOffY;
+  const base = baseTransformRef.current ?? ctx.getTransform();
+  const viewport = { a: base.a, b: base.b, c: base.c, d: base.d,
+    e: base.e - base.a * cameraX - base.c * cameraY,
+    f: base.f - base.b * cameraX - base.d * cameraY };
+  context.aimPresentationRef.current.viewport = viewport;
 
   const lighting = context.lighting;
-  const images: SpriteImages = { playerIdle: playerIdleImage, playerWalk: playerWalkImage,
+  const images: SpriteImages = { ...context.bossParts, playerIdle: playerIdleImage, playerWalk: playerWalkImage,
     playerDash: playerDashImage, enemy_1: enemy_1Image, enemy_2: enemy_2Image,
     enemy_3: enemy_3Image, enemy_4_1: enemy_4_1Image, enemy_4_2: enemy_4_2Image,
     boss: bossImage, boss2: boss2Image };
@@ -562,16 +573,14 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
       dest: { x: obstacle.x, y: obstacle.y, width: obstacle.width, height: obstacle.height }, flip: false });
   }
   const monsterSprites = new Map(world.monsters.map(monster => [monster.id, monsterSprite(monster, now, images)]));
-  // Keep the existing aiming/mirror contract; light coordinates use the actual camera instead.
-  const bounds = canvas.getBoundingClientRect();
-  const aim = Math.atan2(world.mousePos.y - bounds.top - GAME_CONFIG.CANVAS_HEIGHT / 2,
-    world.mousePos.x - bounds.left - GAME_CONFIG.CANVAS_WIDTH / 2);
+  const newBossSprites = new Map(world.monsters.filter(m => m.boss).map(m => [m.id, bossSprites(m, now, images)]));
+  const aim = getAimAngle(world.player, world.mousePos, canvas, viewport) ?? 0;
   const degrees = (aim * 180 / Math.PI + 360) % 360;
   const playerBody = playerSprite(world.player, now, images, dashRef.current, degrees <= 90 || degrees > 270);
   if (lighting) lighting.prepareFrame({ width: canvas.width, height: canvas.height,
     camera: { x: cameraX, y: cameraY }, light: { x: world.player.x, y: world.player.y }, images,
-    sprites: [...obstacleSprites.values(), ...[...monsterSprites.values()].filter((s): s is LitSprite => !!s),
-      ...(playerBody ? [playerBody] : [])] });
+    sprites: [...newBossSprites.values()].flat().concat([...obstacleSprites.values(), ...[...monsterSprites.values()].filter((s): s is LitSprite => !!s),
+      ...(playerBody ? [playerBody] : [])]) });
   const drawBody = (sprite: LitSprite) => {
     if (lighting) { lighting.drawShadow(ctx, sprite); lighting.drawSprite(ctx, sprite); }
     else drawOriginalSprite(ctx, sprite);
@@ -689,6 +698,7 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
 
   // 绘制敌人子弹
   world.enemyBullets.forEach((bullet) => {
+    if (drawBossBullet(ctx, bullet, now, images)) return;
     if (bullet.isFireBall) {
       // BOSS旋转弹幕的大型火球：循环序列帧动画（缩放到60x60）
       if (bossFireBallImage && bullet.spawnTime !== undefined) {
@@ -794,7 +804,13 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
     }
 
     // BOSS渲染逻辑
-    if (isBoss) {
+    if (monster.boss) {
+      drawBossShadow(ctx, monster);
+      for (const part of newBossSprites.get(monster.id) ?? []) {
+        if (lighting) lighting.drawSprite(ctx, part); else drawOriginalSprite(ctx, part);
+      }
+      overlay(() => drawBossWarnings(ctx, monster, now));
+    } else if (isBoss) {
       const jumpAttackState = monster.jumpAttackState || 'idle';
 
       overlay(() => {
@@ -1843,12 +1859,7 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
   }
 
   // 玩家武器（使用美术贴图，智能瞄准和镜像翻转）
-  const canvasRect = canvas.getBoundingClientRect();
-  // 计算鼠标相对于屏幕中心的角度（因为摄像机以玩家为中心）
-  const weaponAngle = Math.atan2(
-    world.mousePos.y - canvasRect.top - GAME_CONFIG.CANVAS_HEIGHT / 2,
-    world.mousePos.x - canvasRect.left - GAME_CONFIG.CANVAS_WIDTH / 2
-  );
+  const weaponAngle = aim;
 
   // 获取当前武器的图片
   const currentWeaponImage = getWeaponImage();
@@ -2473,6 +2484,21 @@ export function renderWorld(context: RenderWorldContext, deltaTime: number) {
     // 绘制白色文字
     ctx.fillStyle = '#ffffff';
     ctx.fillText(`${currentHp}/${maxHp}`, GAME_CONFIG.CANVAS_WIDTH / 2, barY + barHeight / 2);
+  }
+
+  const presentation = context.aimPresentationRef.current;
+  if (world.isPaused || world.gameState !== 'playing' || presentation.blocked) presentation.pointerValid = false;
+  const cursor = clientToCanvas(world.mousePos, canvas.getBoundingClientRect(), canvas.width, canvas.height);
+  const showCrosshair = AIM_CONFIG.enabled && presentation.pointerValid && !presentation.blocked &&
+    world.gameState === 'playing' && !world.isPaused && cursor &&
+    cursor.x >= 0 && cursor.x <= canvas.width && cursor.y >= 0 && cursor.y <= canvas.height;
+  canvas.style.cursor = showCrosshair ? 'none' : AIM_CONFIG.enabled ? 'default' : 'crosshair';
+  if (showCrosshair && cursor) {
+    const spread = deriveAimSpread(world.player, WEAPONS[world.player.weapon], world.aimSpread.movementBloom);
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    drawCrosshair(ctx, cursor, spread.envelopeHalf, dashRef.current.active ? CROSSHAIR_CONFIG.dashAlpha : 1);
+    ctx.restore();
   }
 
   // 如果暂停，绘制半透明遮罩

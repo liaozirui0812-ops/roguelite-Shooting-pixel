@@ -126,6 +126,7 @@ export interface Position {
 }
 
 export interface Player {
+  accuracyPoints: number; // 局内全局精准点，默认0；换枪/跨关保留，新局重置
   x: number;
   y: number;
   hp: number;
@@ -198,7 +199,10 @@ export interface Player {
   weaponSwitchStartTime: number; // 武器切换开始时间
 }
 
+import type { NewBossState } from './bossTypes';
+
 export interface Monster {
+  boss?: NewBossState;
   id: string;
   x: number;
   y: number;
@@ -338,6 +342,10 @@ export interface CoinTrailParticle {
 }
 
 export interface EnemyBullet {
+  ownerId?: string;
+  visual?: 'rock' | 'energy' | 'core';
+  attackGroup?: string;
+  groupSpent?: boolean;
   id: string;
   x: number;
   y: number;
@@ -467,6 +475,7 @@ export interface PierceEffect {
 }
 
 export interface Bullet {
+  hitBossIds?: string[];
   id: string;
   x: number;
   y: number;
@@ -514,7 +523,7 @@ export interface Obstacle {
 }
 
 // 敌人类型定义
-export type MonsterType = 1 | 2 | 3 | 4 | 5;
+export type MonsterType = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export type UpgradeType =
   | 'heal'

@@ -32,7 +32,13 @@ const strip = (
   })),
 });
 // Explicit counts and frame rectangles. Trailing pixels never create a fractional frame.
+const bossParts = (): SpriteAtlas => ({ width: 1254, height: 1254, frameMs: 90, anchor: { x: 0.5, y: 0.5 },
+  frames: Array.from({ length: 16 }, (_, i) => {
+    const edges = [0, 314, 627, 941, 1254], col = i % 4, row = Math.floor(i / 4);
+    return { x: edges[col], y: edges[row], width: edges[col + 1] - edges[col], height: edges[row + 1] - edges[row] };
+  }) });
 export const SPRITE_ATLASES = {
+  bossBoarParts: bossParts(), bossMechParts: bossParts(), bossFx: bossParts(),
   playerIdle: strip(2304, 192, 256, 9),
   playerWalk: strip(2560, 192, 256, 10),
   playerDash: {

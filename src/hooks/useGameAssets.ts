@@ -45,6 +45,9 @@ export function useGameAssets(): GameAssetsState {
   useEffect(() => {
     // 定义所有需要加载的资源
     const resources: AssetSpec[] = [
+      { key: 'bossBoarParts', src: ASSET_PATHS.bossBoarParts },
+      { key: 'bossMechParts', src: ASSET_PATHS.bossMechParts },
+      { key: 'bossFx', src: ASSET_PATHS.bossFx },
       // 金币图片
       { key: 'coin', src: ASSET_PATHS.coin },
       // 子弹图片

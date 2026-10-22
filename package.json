@@ -13,6 +13,7 @@
     "validate": "pnpm run --parallel '/^(ts-check|lint:build)$/'",
     "test:game": "node scripts/run-game-tests.cjs",
     "check:assets": "node scripts/check-assets.cjs",
+    "export:html": "node scripts/export-html.cjs",
     "export:config": "node -r ./scripts/register-typescript.cjs scripts/generate-buff-excel.ts"
   },
   "dependencies": {

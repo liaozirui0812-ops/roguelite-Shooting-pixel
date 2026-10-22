@@ -1,8 +1,10 @@
+import { distributeBossDamage, type BossDamageTarget } from './bossDamage';
 import type { Monster } from '@/game/model/types';
 import { AffixSystem } from '@/game/systems/affixes';
 
 export interface DamageEvent {
   target: Monster;
+  bossHit?: BossDamageTarget;
   amount: number;
   source: 'projectile' | 'explosion' | 'selfDestruct' | 'poisonCircle' | 'dot' | 'aura';
   interceptAffix: boolean;
@@ -18,5 +20,7 @@ export function resolveMonsterDamage(event: DamageEvent) {
   const result = interceptAffix
     ? AffixSystem.onDamage(target, amount)
     : { monster: target, actualDamage: amount, blocked: false };
-  return { ...result, hp: result.monster.hp - result.actualDamage };
+  if (result.blocked) return { ...result, hp: result.monster.hp };
+  const routed = distributeBossDamage(result.monster, result.actualDamage, event.bossHit, event.source);
+  return { ...result, ...routed, hp: routed.monster.hp - routed.actualDamage };
 }

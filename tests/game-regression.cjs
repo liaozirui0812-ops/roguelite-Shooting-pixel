@@ -23,12 +23,13 @@ const live = () => {
 function fixture(runtime) {
   const ref = (value) => ({ current: value });
   const context = {
+    aimPresentationRef: ref({ viewport: { a:1,b:0,c:0,d:1,e:-2400,f:-2600 }, pointerValid:true, blocked:false }),
     world: runtime.state,
     runtime,
     canvasRef: ref({
       width: 1200,
       height: 800,
-      getBoundingClientRect: () => ({ left: 0, top: 0 }),
+      getBoundingClientRect: () => ({ left: 0, top: 0, width:1200, height:800 }),
     }),
     dashPendingRef: ref(false),
     dashRef: ref({
@@ -501,7 +502,7 @@ test('rendering leaves World, recoil and simulation random state unchanged', () 
   const ctx = new Proxy(
     {
       measureText: () => ({ width: 0 }),
-      getTransform: () => ({}),
+      getTransform: () => ({ a:1,b:0,c:0,d:1,e:0,f:0 }),
       createRadialGradient: () => ({ addColorStop() {} }),
       createLinearGradient: () => ({ addColorStop() {} }),
     },
@@ -514,10 +515,11 @@ test('rendering leaves World, recoil and simulation random state unchanged', () 
     }
   );
   const canvas = {
+    style: {},
     width: 1200,
     height: 800,
     getContext: () => ctx,
-    getBoundingClientRect: () => ({ left: 0, top: 0 }),
+    getBoundingClientRect: () => ({ left: 0, top: 0, width:1200, height:800 }),
   };
   const renderer = {
     ...context,

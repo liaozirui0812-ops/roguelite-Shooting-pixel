@@ -1,3 +1,4 @@
+import { hitBoss } from '@/game/rules/bossPose';
 import { settleEnemyDeath } from '@/game/systems/death';
 
 import { resolveMonsterDamage } from '@/game/rules/damage';
@@ -41,6 +42,7 @@ export function projectileSystem(context: UpdateWorldContext, tick: TickContext)
   // 更新子弹位置和检测碰撞
   setBullets((prev) => {
     const newBullets = prev.filter((bullet) => {
+      const previousPosition = { x: bullet.x, y: bullet.y };
       bullet.x += bullet.vx;
       bullet.y += bullet.vy;
 
@@ -122,11 +124,16 @@ export function projectileSystem(context: UpdateWorldContext, tick: TickContext)
           }
           const monsterConfig = MONSTER_CONFIGS[monster.monsterType];
 
-          if (!hitMonster && checkCircleCollision(bullet, monster, bullet.size, monsterConfig.size)) {
+          const bossHit = monster.boss && !bullet.hitBossIds?.includes(monster.id)
+            ? hitBoss(monster, previousPosition, bullet, bullet.size, runtime.now()) : null;
+          const collision = monster.boss ? !!bossHit : checkCircleCollision(bullet, monster, bullet.size, monsterConfig.size);
+          if (!hitMonster && collision) {
             hitMonster = true;
+            if (monster.boss) bullet.hitBossIds = [...(bullet.hitBossIds ?? []), monster.id];
 
             // 火箭弹碰撞检测：触发爆炸并影响范围内所有敌人
             if (bullet.isRocket) {
+              if (bossHit) { bullet.x = bossHit.point.x; bullet.y = bossHit.point.y; }
               triggerExplosion(
                 bullet.x,
                 bullet.y,
@@ -182,6 +189,7 @@ export function projectileSystem(context: UpdateWorldContext, tick: TickContext)
               target: monster,
               amount: actualDamage,
               source: 'projectile',
+              bossHit: monster.boss ? { core: !bossHit?.legId, legIds: bossHit?.legId ? [bossHit.legId] : [], now: runtime.now() } : undefined,
               interceptAffix: true,
               respectInvincible: true,
             });

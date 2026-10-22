@@ -4,6 +4,7 @@ import type { MuzzleFlash, WeaponType } from '@/game';
 import type { SoundType } from '@/hooks/useSound';
 import { resetRunWorld } from '@/game/runtime/createRun';
 import { startLevel } from './level';
+import type { AimPresentation } from '@/game/rules/aim';
 
 type Runtime = GameRuntime<GameWorld>;
 
@@ -12,6 +13,7 @@ type Runtime = GameRuntime<GameWorld>;
  * 这些 ref 的所有权仍在页面组件，跨开局不重建；命令只负责在开新局时复位它们。
  */
 export interface RunResetRefs {
+  aimPresentationRef: { current: AimPresentation };
   dashRef: {
     current: {
       active: boolean;
@@ -70,6 +72,8 @@ export function startGameWithWeapon(
   }
 
   resetRunWorld(runtime, weaponType);
+  refs.aimPresentationRef.current.viewport = null;
+  refs.aimPresentationRef.current.pointerValid = false;
   refs.cameraInitRef.current = false;
   regenerateMap();
   startLevel(runtime, playSound, 1); // 传入关卡参数 1，确保生成第一关的怪物

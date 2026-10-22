@@ -47,6 +47,8 @@ export interface LightingMaterial {
 const CHARACTER: LightingMaterial = { profile: 'capsule', strength: 1, rim: true, shadow: true };
 /** Presentation metadata only: never changes collision geometry or entity state. */
 export const LIGHTING_MATERIALS: Partial<Record<AssetId, LightingMaterial>> = {
+  bossBoarParts: { ...CHARACTER, shadow: false },
+  bossMechParts: { ...CHARACTER, profile: 'bevel', shadow: false },
   playerIdle: CHARACTER,
   playerWalk: CHARACTER,
   playerDash: { ...CHARACTER, shadow: false },

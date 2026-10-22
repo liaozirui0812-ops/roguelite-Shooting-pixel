@@ -49,11 +49,11 @@ export function spawnMonsterWaves(
     2: Math.max(1, Math.floor(3 + currentLevel * 0.64)), // 中型敌人：3 + level × 0.64（原0.8，降20%）
     3: Math.max(1, Math.floor(1 + currentLevel * 0.4)), // 大型敌人：1 + level × 0.4（原0.5，降20%）
     4: Math.max(1, Math.floor(2 + currentLevel * 0.48)), // 远程敌人：2 + level × 0.48（原0.6，降20%）
-    5: 1, // BOSS：1个
+    5: 1, 6: 1, 7: 1, // BOSS：1个
   };
 
   // 根据关卡数分配权重
-  const weightDistribution: Record<MonsterType, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  const weightDistribution: Record<MonsterType, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
 
   for (let i = 0; i < totalWeight; i++) {
     const rand = runtime.random();
@@ -158,12 +158,13 @@ export function spawnMonsterWaves(
 
   // 第5关：最后生成BOSS
   if (currentLevel === 5 && totalWeight > 0) {
-    const bossConfig = MONSTER_CONFIGS[5]; // 史莱姆王
+    const bossType = ([5, 6, 7] as const)[Math.floor(runtime.random() * 3)];
+    const bossConfig = MONSTER_CONFIGS[bossType];
     const x = GAME_CONFIG.WORLD_WIDTH / 2;
     const y = 100; // 从上方生成
 
     allMonsters.push(
-      createMonster({ id: runtime.nextId('boss'), monsterType: 5, x, y, now: runtime.now() })
+      createMonster({ id: runtime.nextId('boss'), monsterType: bossType, x, y, now: runtime.now() })
     );
 
     setBossAlive(true);

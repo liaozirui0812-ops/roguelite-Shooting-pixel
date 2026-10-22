@@ -1,3 +1,5 @@
+import { bossResistsKnockback } from './bossSystem';
+import { traceBossPath } from '@/game/rules/bossGeometry';
 import { settleEnemyDeath } from '@/game/systems/death';
 
 import { resolveMonsterDamage } from '@/game/rules/damage';
@@ -53,7 +55,7 @@ export function monsterSystem(context: UpdateWorldContext, tick: TickContext) {
       // ========== 冲击波击退效果 ==========
       let updatedMonster = { ...monster };
 
-      if (monster.knockbackEndTime && now < monster.knockbackEndTime) {
+      if (monster.knockbackEndTime && now < monster.knockbackEndTime && !bossResistsKnockback(monster)) {
         // 应用击退速度
         updatedMonster.x += (monster.knockbackVx || 0) * (1 / 60); // 按帧率计算
         updatedMonster.y += (monster.knockbackVy || 0) * (1 / 60);
@@ -509,6 +511,13 @@ export function monsterSystem(context: UpdateWorldContext, tick: TickContext) {
         }
       }
 
+      if (updatedMonster.boss) {
+        // New Boss movement is advanced after statuses by bossSystem.
+        const radius = MONSTER_CONFIGS[updatedMonster.monsterType].size;
+        const next = traceBossPath(monster, updatedMonster, radius, world.obstacles, GAME_CONFIG.WORLD_WIDTH, GAME_CONFIG.WORLD_HEIGHT).to;
+        return { ...updatedMonster, x: next.x, y: next.y, boss: { ...updatedMonster.boss, movementScale: monster.speed ? effectiveSpeed / monster.speed : 0 } };
+      }
+
       // 如果BOSS正在进行落地攻击（jump_start, airborne, landing），跳过移动逻辑
       if (
         updatedMonster.isBoss &&
@@ -668,7 +677,7 @@ export function monsterSystem(context: UpdateWorldContext, tick: TickContext) {
       // BOSS特殊处理：BOSS可以穿过障碍物，直接更新位置
       if (monster.isBoss) {
         // 更新敌人4的动画状态
-        let updatedMonster = { ...monster, x: newX, y: newY, vx: finalVx, vy: finalVy };
+        let bossUpdatedMonster = { ...updatedMonster, x: newX, y: newY, vx: finalVx, vy: finalVy };
 
         if (monster.monsterType === 4 && monster.isShooting && monster.shootAnimationStartTime) {
           // 检查Shoot动画是否播放完成
@@ -678,15 +687,15 @@ export function monsterSystem(context: UpdateWorldContext, tick: TickContext) {
 
           if (timeSinceShootStart >= shootAnimationDuration) {
             // Shoot动画播放完成，重置为Walk状态
-            updatedMonster = {
-              ...updatedMonster,
+            bossUpdatedMonster = {
+              ...bossUpdatedMonster,
               isShooting: false,
               shootAnimationStartTime: 0,
             };
           }
         }
 
-        return updatedMonster;
+        return bossUpdatedMonster;
       }
 
       // 检查最终位置是否碰撞

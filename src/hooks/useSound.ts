@@ -3,7 +3,8 @@
 import { useCallback, useRef, useEffect, useState } from 'react';
 
 // 音效类型
-export type SoundType = 
+export type SoundType =
+  | 'boar_charge' | 'boar_stomp' | 'mech_pierce' | 'mech_break' | 'mech_volley'
   | 'shoot'           // 开火
   | 'enemy_death'     // 敌人死亡
   | 'explosion'       // 爆炸
@@ -238,7 +239,20 @@ const generateCoinSound = (ctx: AudioContext, gainNode: GainNode) => {
 };
 
 // 音效配置表
+const bossTone = (from: number, to: number, duration: number, waveform: OscillatorType) =>
+  (ctx: AudioContext, output: GainNode) => {
+    const now = ctx.currentTime, osc = ctx.createOscillator(), envelope = ctx.createGain();
+    osc.type = waveform; osc.frequency.setValueAtTime(from, now);
+    osc.frequency.exponentialRampToValueAtTime(to, now + duration);
+    envelope.gain.setValueAtTime(0.22, now); envelope.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    osc.connect(envelope); envelope.connect(output); osc.start(now); osc.stop(now + duration);
+  };
 const SOUND_CONFIGS: Record<SoundType, SoundConfig> = {
+  boar_charge: { type: 'synth', generator: bossTone(85, 165, 0.65, 'sawtooth'), volume: 0.35, rateLimit: 500 },
+  boar_stomp: { type: 'synth', generator: bossTone(150, 28, 0.28, 'triangle'), volume: 0.5, rateLimit: 150 },
+  mech_pierce: { type: 'synth', generator: bossTone(280, 1350, 0.5, 'square'), volume: 0.15, rateLimit: 500 },
+  mech_break: { type: 'synth', generator: bossTone(1200, 55, 0.3, 'sawtooth'), volume: 0.25, rateLimit: 180 },
+  mech_volley: { type: 'synth', generator: bossTone(900, 230, 0.18, 'triangle'), volume: 0.3, rateLimit: 150 },
   shoot: {
     type: 'synth',
     generator: generateShootSound,
